@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Memex — Associative Dashboard</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        :root {
+            --bg-desk: #1e1c18;
+            --panel-wood: #2c251e;
+            --screen-glass: rgba(216, 243, 220, 0.15);
+            --glow: #52b788;
+            --brass: #d4af37;
+            --text-light: #e0d6c8;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-desk);
+            font-family: 'Courier New', Courier, monospace;
+            color: var(--text-light);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background: #111;
+            padding: 15px 20px;
+            border-bottom: 3px solid var(--brass);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.4rem;
+            color: var(--brass);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .status-badge {
+            font-size: 0.8rem;
+            background: rgba(82, 183, 136, 0.2);
+            color: var(--glow);
+            padding: 4px 8px;
+            border: 1px solid var(--glow);
+            border-radius: 4px;
+        }
+
+        /* Dashboard Layout */
+        .dashboard-container {
+            display: flex;
+            flex-grow: 1;
+            height: calc(100vh - 60px);
+        }
+
+        /* Sidebar for Trail Indexing */
+        .sidebar {
+            width: 320px;
+            background: var(--panel-wood);
+            border-right: 3px solid #111;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .sidebar-section {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 3px solid var(--brass);
+        }
+
+        h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: var(--brass);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+
+        .trail-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .trail-item {
+            padding: 8px;
+            margin-bottom: 5px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 4px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .trail-item:hover {
+            background: rgba(212, 175, 55, 0.2);
+            color: #fff;
+        }
+
+        /* The Map Canvas Viewport */
+        .map-viewport {
+            flex-grow: 1;
+            position: relative;
+            background: radial-gradient(circle, #25221c 0%, #131210 100%);
+        }
+
+        #network-graph {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Dynamic Inspection Overlay */
+        .inspection-overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(27, 25, 22, 0.95);
+            border: 2px solid var(--brass);
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .overlay-header {
+            display: flex;
+            justify-content: space-between;
+            color: var(--brass);
+            font-weight: bold;
+            border-bottom: 1px dashed rgba(212, 175, 55, 0.3);
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+
+        .action-btn {
+            background: var(--brass);
+            color: #000;
+            border: none;
+            padding: 6px 12px;
+            font-family: monospace;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .action-btn:hover {
+            background: #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Memex // Topological Mind Map</h1>
+        <div class="status-badge">● CLOUD ENGINE ONLINE</div>
+    </header>
+
+    <div class="dashboard-container">
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3>System Directives</h3>
+                <p style="font-size: 0.8rem; line-height: 1.4; margin: 0;">
+                    Pinch/Scroll to zoom out to macro-view. Drag nodes to reshape associative spatial configurations. Tapping a node hooks into the document preview engine.
+                </p>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>Active Master Trails</h3>
+                <ul class="trail-list">
+                    <li class="trail-item" onclick="focusOnTrail('CRUSADES')">➔ CRUSADES (5 nodes)</li>
+                    <li class="trail-item" onclick="focusOnTrail('ELASTICITY')">➔ ELASTICITY (3 nodes)</li>
+                    <li class="trail-item" onclick="focusOnTrail('ANATOMY')">➔ HISTOLOGY/ANATOMY (2 nodes)</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="map-viewport">
+            <div id="network-graph"></div>
+
+            <div class="inspection-overlay" id="inspector">
+                <div class="overlay-header">
+                    <span id="inspect-title">DOCUMENT CODE: NONE</span>
+                    <span id="inspect-mnemonic" style="color: var(--glow);">CODE</span>
+                </div>
+                <p id="inspect-desc" style="margin: 0 0 12px 0; font-size: 0.9rem; color: #b5ad9e;"></p>
+                <div style="text-align: right;">
+                    <button class="action-btn" onclick="loadIntoDesk()">Project to Translucent Screens ➔</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let network = null;
+        let selectedNodeId = null;
+
+        // Mock localized dataset acting as the blueprint model
+        const mockNodes = [
+            { id: 1, label: 'BOW', title: 'Mnemonic: BOW', group: 'history', desc: 'Encyclopedia entry covering the historical mechanics of early ballistic staves and the composite short bow.' },
+            { id: 2, label: 'ARROW', title: 'Mnemonic: ARROW', group: 'history', desc: 'Crusade military journals detailing projectile tactical parameters and native arrow speed release formulas.' },
+            { id: 3, label: 'ELASTIC', title: 'Mnemonic: ELASTIC', group: 'science', desc: 'Textbook manuscript detailing Stress-Strain relations, Hooke\'s Law, and structural dynamics of reflex curves.' },
+            { id: 4, label: 'CRUSADES', title: 'Mnemonic: CRUSADES', group: 'history', desc: 'Vast chronological historical record tracking tactical engagement metrics between European and Middle Eastern units.' },
+            { id: 5, label: 'ANATOMY', title: 'Mnemonic: ANATOMY', group: 'medical', desc: 'Anatomical references detailing muscular dynamics and kinetic force projection properties of the human shoulder wrap.' }
+        ];
+
+        const mockEdges = [
+            { from: 1, to: 2, label: 'CRUSADES TRAIL', color: { color: '#d4af37' }, width: 2 },
+            { from: 1, to: 4, label: 'CRUSADES TRAIL', color: { color: '#d4af37' }, width: 2 },
+            { from: 2, to: 4, label: 'CRUSADES TRAIL', color: { color: '#d4af37' }, width: 2 },
+            { from: 1, to: 3, label: 'ELASTICITY TRAIL', color: { color: '#52b788' }, width: 2 },
+            { from: 5, to: 1, label: 'BIOMECHANICS', color: { color: '#3a86ff' }, width: 1 }
+        ];
+
+        function initializeMap() {
+            const container = document.getElementById('network-graph');
+            
+            const data = {
+                nodes: new vis.DataSet(mockNodes.map(n => ({
+                    id: n.id,
+                    label: n.label,
+                    shape: 'dot',
+                    size: 20,
+                    font: { face: 'Courier New', color: '#e0d6c8', size: 14 },
+                    color: {
+                        background: '#2c251e',
+                        border: '#d4af37',
+                        highlight: { background: '#52b788', border: '#fff' }
+                    }
+                }))),
+                edges: new vis.DataSet(mockEdges)
+            };
+
+            const options = {
+                physics: {
+                    barnesHut: { gravitationalConstant: -3000, centralGravity: 0.3, springLength: 120 }
+                },
+                interaction: { 
+                    hover: true,
+                    zoomView: true,
+                    dragView: true
+                }
+            };
+
+            network = new vis.Network(container, data, options);
+
+            // Node Click Event
+            network.on("click", function (params) {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    showInspector(nodeId);
+                } else {
+                    document.getElementById('inspector').style.display = 'none';
+                }
+            });
+        }
+
+        function showInspector(nodeId) {
+            selectedNodeId = nodeId;
+            const nodeData = mockNodes.find(n => n.id === nodeId);
+            
+            document.getElementById('inspect-title').innerText = nodeData.title;
+            document.getElementById('inspect-mnemonic').innerText = `GROUP: ${nodeData.group.toUpperCase()}`;
+            document.getElementById('inspect-desc').innerText = nodeData.desc;
+            document.getElementById('inspector').style.display = 'block';
+        }
+
+        function focusOnTrail(trailName) {
+            alert(`Filtering map overlay machinery to isolate pathway: [${trailName}]. Custom viewport focus zoom triggered.`);
+        }
+
+        function loadIntoDesk() {
+            const nodeData = mockNodes.find(n => n.id === selectedNodeId);
+            alert(`System Command: Routing document index context [${nodeData.label}] cleanly into Workspace Viewports...`);
+        }
+
+        window.onload = initializeMap;
+    </script>
+</body>
+</html>
