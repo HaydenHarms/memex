@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Memex — Knowledge Console</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&family=Inter:wght@400;600&family=Merriweather:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* Palette Architecture */
+            --bg-main: #fdfcf7;         /* Warm ivory paper canvas */
+            --bg-panel: #f5f2e9;        /* Library wood paneling insert */
+            --border-crisp: #dcd6c8;    /* Muted book-edge seam */
+            --text-main: #1c2331;       /* Deep scholar charcoal-navy */
+            --text-muted: #5c667a;      /* Slate blue-grey for sub-text */
+            --navy-solid: #0b1a30;      /* Solid Library Navy */
+            --gold-brass: #b89047;      /* Burnished Documentation Gold */
+            --gold-glow: rgba(184, 144, 71, 0.15);
+            --crimson-alert: #9e2a2b;   /* Deep crimson archive alert */
+            
+            --font-heading: 'Merriweather', serif;
+            --font-body: 'Inter', sans-serif;
+            --font-mono: 'Fira Code', monospace;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: var(--font-body);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background: var(--navy-solid);
+            color: #ffffff;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid var(--gold-brass);
+            box-shadow: 0 4px 15px rgba(11, 26, 48, 0.08);
+            z-index: 100;
+        }
+
+        header h1 {
+            margin: 0;
+            font-family: var(--font-heading);
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+        }
+
+        .controls-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .view-btn {
+            background: transparent;
+            border: 1px solid var(--gold-brass);
+            color: var(--gold-brass);
+            padding: 6px 12px;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            cursor: pointer;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+
+        .view-btn:hover {
+            background: var(--gold-brass);
+            color: var(--navy-solid);
+        }
+
+        .display-select {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border-crisp);
+            color: #fff;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .app-view {
+            display: none;
+            width: 100vw;
+            height: calc(100vh - 55px);
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        #view-map.active { display: flex; flex-direction: row; }
+        #view-desk.active { display: flex; flex-direction: row; }
+
+        /* Vault Sidebar Structuring */
+        .map-sidebar, .desk-sidebar {
+            background-color: var(--bg-panel);
+            border-right: 1px solid var(--border-crisp);
+            width: 360px;
+            min-width: 220px;
+            max-width: 600px;
+            flex-shrink: 0;
+            box-sizing: border-box;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .map-sidebar {
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .file-tree {
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-top: 5px;
+            user-select: none;
+        }
+
+        .tree-node {
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
+            cursor: pointer;
+            border-radius: 3px;
+            color: var(--text-main);
+            transition: background 0.12s;
+        }
+
+        .tree-node:hover {
+            background: rgba(184, 144, 71, 0.12);
+        }
+
+        .tree-arrow {
+            font-size: 0.55rem;
+            margin-right: 6px;
+            display: inline-block;
+            transition: transform 0.1s ease;
+            width: 10px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .tree-arrow.expanded {
+            transform: rotate(90deg);
+        }
+
+        .tree-folder {
+            font-weight: bold;
+            color: var(--navy-solid);
+        }
+
+        .tree-file {
+            margin-left: 14px;
+            font-weight: 600;
+        }
+
+        .tree-page {
+            margin-left: 32px;
+            color: var(--text-muted);
+            font-size: 0.74rem;
+        }
+
+        .tree-children {
+            display: none;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .tree-children.expanded {
+            display: flex;
+        }
+
+        /* WINDOW GUTTER RESIZER */
+        .gutter-resizer {
+            width: 6px;
+            background-color: var(--border-crisp);
+            cursor: col-resize;
+            flex-shrink: 0;
+            transition: background-color 0.15s;
+            position: relative;
+            z-index: 50;
+        }
+        .gutter-resizer:hover, .gutter-resizer.dragging {
+            background-color: var(--gold-brass);
+            box-shadow: 0 0 8px rgba(184, 144, 71, 0.4);
+        }
+
+        /* MAP SURFACE CORE */
+        #map-view-container {
+            position: relative;
+            background: radial-gradient(circle, #fdfcf7 0%, #edeae0 100%);
+            flex: 1;
+            min-width: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #topology-graph {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .floating-hud {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            background: rgba(253, 252, 247, 0.95);
+            border: 1px solid var(--border-crisp);
+            border-left: 5px solid var(--navy-solid);
+            padding: 20px;
+            border-radius: 4px;
+            max-width: 380px;
+            box-shadow: 0 10px 30px rgba(11, 26, 48, 0.08);
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .hud-title { font-family: var(--font-heading); font-size: 1.1rem; color: var(--navy-solid); margin: 0 0 5px 0; }
+        .hud-meta { font-family: var(--font-mono); font-size: 0.75rem; color: var(--gold-brass); margin-bottom: 12px; font-weight: bold; }
+        .hud-body { font-size: 0.85rem; line-height: 1.5; color: var(--text-muted); }
+
+        /* Custom Context Menu Templates */
+        .custom-context-menu {
+            position: absolute;
+            background: var(--bg-panel);
+            border: 1px solid var(--gold-brass);
+            box-shadow: 0 6px 20px rgba(11, 26, 48, 0.15);
+            border-radius: 4px;
+            z-index: 1000;
+            display: none;
+            width: 240px;
+            overflow: hidden;
+        }
+
+        .menu-header {
+            background: var(--navy-solid);
+            color: #fff;
+            padding: 8px 12px;
+            font-size: 0.75rem;
+            font-family: var(--font-mono);
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--gold-brass);
+        }
+
+        .menu-item {
+            padding: 10px 12px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            color: var(--text-main);
+            font-weight: 600;
+            transition: background 0.15s;
+        }
+
+        .menu-item:hover {
+            background: rgba(184, 144, 71, 0.15);
+            color: var(--navy-solid);
+        }
+
+        /* VIEWPORT ARCHITECTURE CONFIGURATION */
+        .desk-sidebar {
+            display: grid;
+            grid-template-rows: 1fr 320px;
+        }
+
+        .sidebar-top {
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .sidebar-bottom {
+            border-top: 1px solid var(--border-crisp);
+            background: rgba(253, 252, 247, 0.5);
+            position: relative;
+            height: 320px;
+        }
+
+        #mini-neighborhood-graph { width: 100%; height: 100%; }
+
+        .section-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--navy-solid);
+            border-bottom: 1px solid var(--border-crisp);
+            padding-bottom: 5px;
+            margin-bottom: 5px;
+        }
+
+        .action-btn {
+            background: var(--bg-main);
+            border: 1px solid var(--border-crisp);
+            color: var(--text-main);
+            padding: 6px 12px;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            cursor: pointer;
+            border-radius: 3px;
+            font-weight: 600;
+            width: 100%;
+            text-align: center;
+            box-sizing: border-box;
+        }
+
+        .action-btn:hover { background: var(--navy-solid); color: #fff; border-color: var(--navy-solid); }
+
+        .platen-dropzone {
+            border: 1px dashed var(--gold-brass);
+            background: rgba(184, 144, 71, 0.04);
+            border-radius: 4px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+
+        .platen-title { font-size: 0.75rem; font-weight: bold; color: var(--gold-brass); text-transform: uppercase; margin-bottom: 4px; }
+        .platen-subtext { font-size: 0.65rem; color: var(--text-muted); line-height: 1.3; }
+
+        .desk-screens-area {
+            display: flex;
+            flex-direction: row;
+            flex: 1;
+            min-width: 0;
+            box-sizing: border-box;
+            height: 100%;
+            padding: 15px;
+            gap: 0;
+        }
+
+        .translucent-viewport {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-crisp);
+            border-radius: 6px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            height: 100%;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        #viewport-box-A { width: 50%; min-width: 20%; max-width: 80%; flex-shrink: 0; }
+        #viewport-box-B { flex: 1; min-width: 20%; }
+
+        .viewport-header {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            border-bottom: 1px dashed var(--border-crisp);
+            padding-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .lever-btn-group { display: flex; gap: 4px; }
+        .lever-nav { background: var(--bg-main); border: 1px solid var(--border-crisp); padding: 2px 6px; font-size: 0.65rem; cursor: pointer; font-weight: bold; border-radius: 2px; }
+        .lever-nav:hover { background: var(--navy-solid); color: #fff; }
+
+        .workspace-scroll-frame {
+            flex: 1;
+            overflow-y: auto;
+            position: relative;
+            border: 1px solid var(--border-crisp);
+            border-radius: 4px;
+            background: var(--bg-main);
+        }
+
+        .workspace-stack {
+            position: relative;
+            width: 100%;
+            min-height: 100%;
+            box-sizing: border-box;
+        }
+
+        .viewport-content { 
+            font-family: var(--font-heading); 
+            line-height: 1.6; 
+            font-size: 0.92rem; 
+            padding: 15px;
+            box-sizing: border-box;
+        }
+        
+        .editable-title, .editable-subheading, .editable-body { 
+            outline: none; 
+            border-radius: 3px; 
+            transition: background 0.15s, border-color 0.15s; 
+            padding: 4px 6px; 
+            border: 1px dashed transparent;
+        }
+        .editable-title:hover, .editable-subheading:hover, .editable-body:hover { 
+            background: rgba(184, 144, 71, 0.06); 
+            border-color: var(--border-crisp);
+            cursor: text; 
+        }
+        .editable-title:focus, .editable-subheading:focus, .editable-body:focus { 
+            background: #ffffff; 
+            border-color: var(--gold-brass);
+            box-shadow: 0 2px 8px rgba(184, 144, 71, 0.1); 
+        }
+        
+        .editable-title { margin-top: 0; color: var(--navy-solid); font-size: 1.25rem; margin-left: -6px; font-weight: 700; }
+        .editable-subheading { color: var(--gold-brass); font-size: 1rem; margin-top: 5px; margin-left: -6px; font-weight: 600; }
+        
+        .editable-body {
+            font-family: var(--font-heading);
+            line-height: 1.65;
+            font-size: 0.94rem;
+            color: var(--text-main);
+            margin-top: 10px;
+            white-space: pre-wrap;
+        }
+
+        /* Standardized layout overlay parameters for ink environments */
+        .canvas-layer { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            z-index: 5; 
+            cursor: crosshair; 
+            pointer-events: none; 
+        }
+
+        /* UPGRADE: Structured local layout ledger stack for decoupled ink + text notes */
+        .annotation-ledger-stack {
+            height: 130px;
+            flex-shrink: 0;
+            position: relative;
+            border: 1px solid var(--border-crisp);
+            border-radius: 4px;
+            background: var(--bg-main);
+            overflow: hidden;
+        }
+
+        .ledger-typing-field {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            border: none;
+            outline: none;
+            font-family: var(--font-heading);
+            font-style: italic;
+            background: transparent;
+            font-size: 0.85rem;
+            color: var(--text-main);
+            z-index: 2;
+            resize: none;
+        }
+
+        .eraser-preview-circle {
+            position: absolute;
+            border: 1.5px dashed var(--crimson-alert);
+            border-radius: 50%;
+            pointer-events: none;
+            display: none;
+            z-index: 25;
+            transform: translate(-50%, -50%);
+            box-sizing: border-box;
+        }
+
+        .mode-console { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.03); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-crisp); flex-shrink: 0; }
+        .toggle-switch-box { display: flex; background: var(--bg-main); border: 1px solid var(--border-crisp); border-radius: 3px; overflow: hidden; }
+        .toggle-tab { font-family: var(--font-mono); font-size: 0.65rem; padding: 3px 8px; cursor: pointer; font-weight: bold; color: var(--text-muted); }
+        .toggle-tab.active { background: var(--navy-solid); color: #fff; }
+        .toggle-tab.sub-active { background: var(--gold-brass); color: #fff; }
+        
+        .toggle-tab#color-red-A.sub-active, .toggle-tab#color-red-B.sub-active { background: var(--crimson-alert); color: #fff; }
+        .toggle-tab#color-navy-A.sub-active, .toggle-tab#color-navy-B.sub-active { background: var(--navy-solid); color: #fff; }
+        .toggle-tab#color-gold-A.sub-active, .toggle-tab#color-gold-B.sub-active { background: var(--gold-brass); color: #fff; }
+
+        .wipe-btn { background: transparent; border: 1px solid var(--border-crisp); color: var(--crimson-alert); font-family: var(--font-mono); font-weight: bold; font-size: 0.65rem; padding: 2px 6px; border-radius: 3px; cursor: pointer; }
+        .wipe-btn:hover { background: var(--crimson-alert); color: #fff; border-color: var(--crimson-alert); }
+
+        .diagnostic-fail {
+            padding: 40px;
+            max-width: 500px;
+            margin: 100px auto;
+            background: #fff;
+            border: 1px solid var(--border-crisp);
+            border-top: 4px solid var(--crimson-alert);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            border-radius: 4px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Memex // Knowledge Management Console</h1>
+        <div class="controls-wrapper">
+            <select class="display-select" id="screen-mode" onchange="toggleMultiScreenArchitecture(this.value)">
+                <option value="unified">Unified Console View</option>
+                <option value="map-only">Screen 1: Map Core Only</option>
+                <option value="desk-only">Screen 2: Desk Windows Only</option>
+            </select>
+            <button class="view-btn" id="return-map-btn" style="display: none;" onclick="switchToView('map')">Return to Knowledge Map</button>
+            <div class="gold-indicator" id="engine-status-tag">SYSTEM ONLINE</div>
+        </div>
+    </header>
+
+    <div class="app-view active" id="view-map">
+        <div class="map-sidebar">
+            <div class="section-label">File Explorer</div>
+            <div class="file-tree" id="map-file-explorer"></div>
+        </div>
+        
+        <div class="gutter-resizer" id="resizer-map"></div>
+
+        <div id="map-view-container">
+            <div id="topology-graph"></div>
+            
+            <div class="floating-hud">
+                <div class="hud-title" id="inspect-title">System Directory</div>
+                <div class="hud-meta" id="inspect-meta">INTERACTIVE KNOWLEDGE MAP</div>
+                <div class="hud-body" id="inspect-desc">
+                    Left-click a main navy <strong>Topic Folder</strong> inside the explorer tree or map node to expand articles.<br><br>
+                    <strong>Right-click</strong> anywhere inside the Explorer Sidebar layout to generate completely new custom structural files, nodes, or collection modules.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-view" id="view-desk">
+        <div class="desk-sidebar">
+            <div class="sidebar-top">
+                <div class="section-label">File Explorer</div>
+                <div class="file-tree" id="desk-file-explorer"></div>
+                
+                <div class="section-label">File Operations</div>
+                <div class="platen-dropzone" id="platen-vault" onclick="document.getElementById('hidden-file-picker').click()">
+                    <div class="platen-title">📸 File Uploader</div>
+                    <div class="platen-subtext">Drop PDF/image attachments or click to import files directly into storage</div>
+                    <input type="file" id="hidden-file-picker" style="display: none;" accept="image/*,application/pdf" onchange="handlePlatenFileSelection(this.files)">
+                </div>
+                <button class="action-btn" style="margin-top: 5px;" onclick="insertBlankPageMechanicalLever()">+ Insert New Page</button>
+            </div>
+            <div class="sidebar-bottom" id="mini-map-container">
+                <div class="section-label" style="position: absolute; top: 15px; left: 20px; z-index: 5; border: none;">Neighborhood Mini-Map</div>
+                <div id="mini-neighborhood-graph"></div>
+            </div>
+        </div>
+        
+        <div class="gutter-resizer" id="resizer-desk"></div>
+
+        <div class="desk-screens-area">
+            <div class="translucent-viewport" id="viewport-box-A">
+                <div class="viewport-header">
+                    <span id="meta-A">INDEX</span>
+                    <div class="lever-btn-group" id="levers-A" style="display: none;">
+                        <button class="lever-nav" onclick="stepMicrofilmPage('A', -1)">◀ PREV</button>
+                        <button class="lever-nav" onclick="stepMicrofilmPage('A', 1)">NEXT ▶</button>
+                    </div>
+                </div>
+                
+                <div class="workspace-scroll-frame" id="scroll-frame-A">
+                    <div class="workspace-stack" id="stack-doc-A">
+                        <div class="viewport-content" id="content-A">
+                            <h2>Viewport Position Alpha</h2>
+                            <p style="color:var(--text-muted)">Right-click any article or page node on the map or sidebar explorer to project content layouts here.</p>
+                        </div>
+                        <canvas class="canvas-layer" id="can-doc-A"></canvas>
+                        <div class="eraser-preview-circle" id="eraser-preview-doc-A"></div>
+                    </div>
+                </div>
+                
+                <div class="section-label" style="flex-shrink:0;">Page-Specific Annotation Ledger</div>
+                
+                <div class="annotation-ledger-stack" id="stack-notes-A">
+                    <textarea class="ledger-typing-field" id="txt-A" placeholder="Type page-locked marginalia logs here..."></textarea>
+                    <canvas class="canvas-layer" id="can-notes-A"></canvas>
+                    <div class="eraser-preview-circle" id="eraser-preview-notes-A"></div>
+                </div>
+
+                <div class="section-label" style="flex-shrink:0;">Console Operations</div>
+                <div class="mode-console">
+                    <div class="toggle-switch-box">
+                        <div class="toggle-tab active" id="tab-txt-A" onclick="setPadInputMode('A', 'text')">KEYBOARD</div>
+                        <div class="toggle-tab" id="can-tab-A" onclick="setPadInputMode('A', 'stylus')">STYLUS</div>
+                    </div>
+                    <div class="toggle-switch-box" id="tools-A" style="display: none; margin-left: 8px;">
+                        <div class="toggle-tab sub-active" id="tool-pen-A" onclick="setStylusTool('A', 'pen')">INK</div>
+                        <div class="toggle-tab" id="tool-era-A" onclick="setStylusTool('A', 'eraser')">ERASER</div>
+                    </div>
+                    
+                    <div class="toggle-switch-box" id="colors-A" style="display: none; margin-left: 8px;">
+                        <div class="toggle-tab sub-active" id="color-red-A" onclick="setStylusColor('A', '#9e2a2b')">CRIMSON</div>
+                        <div class="toggle-tab" id="color-navy-A" onclick="setStylusColor('A', '#0b1a30')">NAVY</div>
+                        <div class="toggle-tab" id="color-gold-A" onclick="setStylusColor('A', '#b89047')">GOLD</div>
+                    </div>
+
+                    <div class="toggle-switch-box" id="sizes-A" style="display: none; margin-left: 8px;">
+                        <div class="toggle-tab" id="size-sm-A" onclick="setStylusSize('A', 'sm')">SM</div>
+                        <div class="toggle-tab sub-active" id="size-md-A" onclick="setStylusSize('A', 'md')">MD</div>
+                        <div class="toggle-tab" id="size-lg-A" onclick="setStylusSize('A', 'lg')">LG</div>
+                    </div>
+                    <button class="wipe-btn" style="margin-left: auto;" onclick="clearActiveWorkspaceCanvases('A')">Wipe Ink</button>
+                </div>
+            </div>
+            
+            <div class="gutter-resizer" id="resizer-viewports"></div>
+            
+            <div class="translucent-viewport" id="viewport-box-B">
+                <div class="viewport-header">
+                    <span id="meta-B">INDEX</span>
+                    <div class="lever-btn-group" id="levers-B" style="display: none;">
+                        <button class="lever-nav" onclick="stepMicrofilmPage('B', -1)">◀ PREV</button>
+                        <button class="lever-nav" onclick="stepMicrofilmPage('B', 1)">NEXT ▶</button>
+                    </div>
+                </div>
+                
+                <div class="workspace-scroll-frame" id="scroll-frame-B">
+                    <div class="workspace-stack" id="stack-doc-B">
+                        <div class="viewport-content" id="content-B">
+                            <h2>Position Beta Frame</h2>
+                            <p style="color:var(--text-muted)">Project reference tracks or parallel file documents side-by-side to construct structural links.</p>
+                        </div>
+                        <canvas class="canvas-layer" id="can-doc-B"></canvas>
+                        <div class="eraser-preview-circle" id="eraser-preview-doc-B"></div>
+                    </div>
+                </div>
+                
+                <div class="section-label" style="flex-shrink:0;">Page-Specific Annotation Ledger</div>
+                
+                <div class="annotation-ledger-stack" id="stack-notes-B">
+                    <textarea class="ledger-typing-field" id="txt-B" placeholder="Type page-locked marginalia logs here..."></textarea>
+                    <canvas class="canvas-layer" id="can-notes-B"></canvas>
+                    <div class="eraser-preview-circle" id="eraser-preview-notes-B"></div>
+                </div>
+
+                <div class="section-label" style="flex-shrink:0;">Console Operations</div>
+                <div class="mode-console">
+                    <div class="toggle-switch-box">
+                        <div class="toggle-tab active" id="tab-txt-B" onclick="setPadInputMode('B', 'text')">KEYBOARD</div>
+                        <div class="toggle-tab" id="can-tab-B" onclick="setPadInputMode('B', 'stylus')">STYLUS</div>
+                    </div>
+                    <div class="toggle-switch-box" id="tools-B" style="display: none; margin-left: 8px;">
+                        <div class="toggle-tab sub-active" id="tool-pen-B" onclick="setStylusTool('B', 'pen')">INK</div>
+                        <div class="toggle-tab" id="tool-era-B" onclick="setStylusTool('B', 'eraser')">ERASER</div>
+                    </div>
+
+                    <div class="toggle-switch-box" id="colors-B" style="display: none; margin-left: 8px;">
+                        <div class="toggle-tab sub-active" id="color-red-B" onclick="setStylusColor('B', '#9e2a2b')">CRIMSON</div>
+                        <div class="toggle-tab" id="color-navy-B" onclick="setStylusColor('B', '#0b1a30')">NAVY</div>
+                        <div class="toggle-tab" id="color-gold-B" onclick="setStylusColor('B', '#b89047')">GOLD</div>
+                    </div>
+
+                    <div class="toggle-switch-box" id="sizes-B" style="display: none; margin-left: 8px;">
+                        <div class="toggle-tab" id="size-sm-B" onclick="setStylusSize('B', 'sm')">SM</div>
+                        <div class="toggle-tab sub-active" id="size-md-B" onclick="setStylusSize('B', 'md')">MD</div>
+                        <div class="toggle-tab" id="size-lg-B" onclick="setStylusSize('B', 'lg')">LG</div>
+                    </div>
+                    <button class="wipe-btn" style="margin-left: auto;" onclick="clearActiveWorkspaceCanvases('B')">Wipe Ink</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="custom-context-menu" id="routing-menu">
+        <div class="menu-header" id="menu-node-label">VIEWPORT COMPILATION DATA</div>
+        <div class="menu-item" onclick="castTargetViewport('A')">➔ Project to Viewport Alpha</div>
+        <div class="menu-item" onclick="castTargetViewport('B')">➔ Project to Viewport Beta</div>
+    </div>
+
+    <div class="custom-context-menu" id="sidebar-routing-menu">
+        <div class="menu-header" id="sidebar-menu-header">FILE SYSTEM EXPLORER</div>
+        <div class="menu-item" id="ctx-create-topic" onclick="sidebarMechanicalCreateTopic()">📁 Create New Topic Folder</div>
+        <div class="menu-item" id="ctx-create-article" onclick="sidebarMechanicalCreateArticle()">📄 Create New Article File</div>
+        <div class="menu-item" id="ctx-create-page" onclick="sidebarMechanicalCreatePage()">📝 Append New Page Index</div>
+        <div class="menu-item" id="ctx-proj-alpha" onclick="sidebarCastTargetViewport('A')">➔ Project to Viewport Alpha</div>
+        <div class="menu-item" id="ctx-proj-beta" onclick="sidebarCastTargetViewport('B')">➔ Project to Viewport Beta</div>
+    </div>
+
+    <script>
+        const MemexState = {
+            db: {
+                "DOC_BOW": { title: "Book: Origins of the Bow", parent: "SUBJ_BALLISTICS", pages: [
+                    { heading: "Origins of the Ballistic Stave", body: "The mechanical efficiency of archery tracks directly to the late Paleolithic era. Early constructs prioritized raw, single-stave wood design parameters to force dynamic kinetic energy yield." },
+                    { heading: "Tactical Deployments in Antioch", body: "During localized Crusade skirmishes, European armored units encountered devastating projectile resistance from light horse archers exploiting fast-release compound weapon frameworks." }
+                ]},
+                "DOC_ARROW": { title: "Manual: Projectile Metrics", parent: "SUBJ_BALLISTICS", pages: [
+                    { heading: "Initial Velocity Scaling", body: "Calculated release properties demonstrate that arrow flight stabilization relies cleanly on drag coefficients and spine stiffness variables relative to draw weight dimensions." }
+                ]},
+                "DOC_NEWTON": { title: "Principia Mathematica", parent: "SUBJ_PHYSICS", pages: [
+                    { heading: "Axioms or Laws of Motion", body: "Law I: Every body preserves in its state of being at rest or of moving uniformly straight forward, except insofar as it is compelled to change its state by forces impressed." }
+                ]}
+            },
+            subjects: { "SUBJ_BALLISTICS": "BALLISTICS & ARCHERY", "SUBJ_PHYSICS": "MATERIALS & MECHANICS" },
+            network: null, miniNetwork: null, nodesDataset: null, edgesDataset: null,
+            expandedNodes: {}, rightClickedContextNode: null, rightClickedSidebarTarget: null, 
+            currentMiniMapFocusDoc: null, selectedMiniMapDocId: null,
+            viewports: {
+                A: { tool: 'none', size: 'md', color: '#9e2a2b', pointer: null },
+                B: { tool: 'none', size: 'md', color: '#9e2a2b', pointer: null }
+            }
+        };
+
+        window.onload = function() {
+            if (typeof vis === 'undefined') {
+                document.getElementById('engine-status-tag').innerText = "CORE OFFLINE";
+                document.getElementById('engine-status-tag').style.color = "var(--crimson-alert)";
+                document.getElementById('map-view-container').innerHTML = `
+                    <div class="diagnostic-fail">
+                        <h2 style="font-family:var(--font-heading);color:var(--crimson-alert);margin-top:0;">⚠️ Graph Engine Fault</h2>
+                        <p style="font-size:0.9rem; line-height:1.6; color:var(--text-main);">
+                            The console failed to instantiate graph tracking matrices because the Vis.js library could not be loaded.
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            try { initTopologyMap(); } catch (mapErr) { console.error("Knowledge Map initialization failed:", mapErr); }
+
+            renderVSCodeFileTree();
+            
+            // Core initialization for split drawing coordinates across both canvas lines
+            initDrawingCanvas('can-doc-A'); initDrawingCanvas('can-notes-A');
+            initDrawingCanvas('can-doc-B'); initDrawingCanvas('can-notes-B');
+            
+            initInlineEditingMutationSync();
+            initPlatenDragAndDropHooks();
+            initSidebarContextMenuTriggers();
+            initLayoutResizers();
+            initGlobalResizeHooks();
+            initLedgerAutoSaveSync();
+            
+            document.addEventListener('click', () => { 
+                document.getElementById('routing-menu').style.display = 'none'; 
+                document.getElementById('sidebar-routing-menu').style.display = 'none';
+            });
+            
+            setTimeout(() => { 
+                if (MemexState.network) { MemexState.network.setSize('100%', '100%'); MemexState.network.redraw(); MemexState.network.fit(); } 
+            }, 250);
+        };
+
+        function initGlobalResizeHooks() {
+            window.addEventListener('resize', () => {
+                if (MemexState.network) { MemexState.network.setSize('100%', '100%'); MemexState.network.redraw(); }
+                if (MemexState.miniNetwork) { MemexState.miniNetwork.setSize('100%', '100%'); MemexState.miniNetwork.redraw(); }
+                anchorCanvasResolution(document.getElementById('can-doc-A')); anchorCanvasResolution(document.getElementById('can-notes-A'));
+                anchorCanvasResolution(document.getElementById('can-doc-B')); anchorCanvasResolution(document.getElementById('can-notes-B'));
+            });
+        }
+
+        function switchToView(viewMode) {
+            const mapEl = document.getElementById('view-map');
+            const deskEl = document.getElementById('view-desk');
+            const btn = document.getElementById('return-map-btn');
+            if (viewMode === 'map') { 
+                mapEl.classList.add('active'); deskEl.classList.remove('active'); btn.style.display = 'none'; 
+                if (MemexState.network) MemexState.network.redraw();
+            } else { 
+                deskEl.classList.add('active'); mapEl.classList.remove('active'); 
+                if (document.getElementById('screen-mode').value === 'unified') btn.style.display = 'block'; 
+            }
+            
+            setTimeout(() => {
+                ['A', 'B'].forEach(vp => {
+                    anchorCanvasResolution(document.getElementById(`can-doc-${vp}`));
+                    anchorCanvasResolution(document.getElementById(`can-notes-${vp}`));
+                });
+                if (viewMode === 'desk' && MemexState.miniNetwork) { MemexState.miniNetwork.setSize('100%','100%'); MemexState.miniNetwork.redraw(); }
+            }, 50);
+        }
+
+        function toggleMultiScreenArchitecture(mode) {
+            if (mode === 'map-only') { switchToView('map'); document.getElementById('return-map-btn').style.display = 'none'; }
+            else if (mode === 'desk-only') { switchToView('desk'); document.getElementById('return-map-btn').style.display = 'none'; }
+            else { switchToView('map'); }
+        }
+
+        function initTopologyMap() {
+            MemexState.nodesDataset = new vis.DataSet(); MemexState.edgesDataset = new vis.DataSet();
+            
+            Object.entries(MemexState.subjects).forEach(([id, name]) => {
+                const posX = id === "SUBJ_BALLISTICS" ? -180 : 180;
+                MemexState.nodesDataset.add({ 
+                    id: id, label: name, x: posX, y: 0, fixed: { x: true, y: true }, shape: 'dot', size: 30, 
+                    font: { face: 'Merriweather', size: 14, bold: true, color: '#0b1a30' }, 
+                    color: { background: '#0b1a30', border: '#b89047' }, borderWidth: 2 
+                });
+            });
+
+            const container = document.getElementById('topology-graph');
+            MemexState.network = new vis.Network(container, { nodes: MemexState.nodesDataset, edges: MemexState.edgesDataset }, { physics: { stabilization: false, barnesHut: { gravitationalConstant: -1200, centralGravity: 0.1, springLength: 90 } } });
+            MemexState.network.on("click", (p) => { if(p.nodes.length > 0) handleLeftClickNode(p.nodes[0]); });
+            
+            container.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                const rect = container.getBoundingClientRect();
+                const nodeId = MemexState.network.getNodeAt({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                if (nodeId && (nodeId.startsWith('MOON_') || MemexState.db[nodeId])) { showCustomRoutingMenu(e.pageX, e.pageY, nodeId); }
+            }, true);
+        }
+
+        function handleLeftClickNode(id) {
+            if (MemexState.subjects[id]) { if (MemexState.expandedNodes[id]) collapseSubject(id); else expandSubject(id); } 
+            else if (MemexState.db[id]) { if (MemexState.expandedNodes[id]) collapseDoc(id); else expandDoc(id); }
+            renderVSCodeFileTree();
+        }
+
+        function expandSubject(id) {
+            Object.entries(MemexState.db).forEach(([k, d]) => {
+                if (d.parent === id && !MemexState.nodesDataset.get(k)) {
+                    const docNode = MemexState.nodesDataset.get(id);
+                    const offsetDeltaY = k.startsWith('DOC_USER_') ? 160 : (k === "DOC_BOW" ? -120 : 120);
+                    MemexState.nodesDataset.add({ id: k, label: d.title, x: docNode.x, y: docNode.y + offsetDeltaY, shape: 'dot', size: 18, font: { face: 'Inter', size: 12, bold: true, color: '#1c2331' }, color: { background: '#b89047', border: '#0b1a30' }, borderWidth: 2 });
+                    MemexState.edgesDataset.add({ id: `e_${k}`, from: id, to: k, color: { color: '#0b1a30', opacity: 0.4 }, width: 2 });
+                }
+            });
+            MemexState.expandedNodes[id] = true;
+        }
+
+        function collapseSubject(id) {
+            Object.entries(MemexState.db).forEach(([k, d]) => {
+                if (d.parent === id) { if (MemexState.expandedNodes[k]) collapseDoc(k); if (MemexState.nodesDataset.get(k)) MemexState.nodesDataset.remove(k); if (MemexState.edgesDataset.get(`e_${k}`)) MemexState.edgesDataset.remove(`e_${k}`); }
+            });
+            delete MemexState.expandedNodes[id];
+        }
+
+        function expandDoc(id) {
+            const docNode = MemexState.nodesDataset.get(id);
+            MemexState.db[id].pages.forEach((p, i) => {
+                const mId = `MOON_${id}_${i}`;
+                if (!MemexState.nodesDataset.get(mId)) {
+                    const offsetDelta = (i - (MemexState.db[id].pages.length - 1) / 2) * 110;
+                    MemexState.nodesDataset.add({ id: mId, label: p.heading, x: docNode.x + offsetDelta, y: docNode.y + (docNode.y < 0 ? -90 : 90), shape: 'dot', size: 12, font: { face: 'Fira Code', size: 10, color: '#b89047' }, color: { background: '#fdfcf7', border: '#b89047' }, borderWidth: 2 });
+                    MemexState.edgesDataset.add({ id: `e_${mId}`, from: id, to: mId, color: { color: '#b89047', opacity: 0.7 }, width: 1.5, dashed: true });
+                }
+            });
+            MemexState.expandedNodes[id] = true;
+        }
+
+        function collapseDoc(id) {
+            if(MemexState.db[id] && MemexState.db[id].pages) {
+                MemexState.db[id].pages.forEach((p, i) => {
+                    const mId = `MOON_${id}_${i}`; if (MemexState.nodesDataset.get(mId)) MemexState.nodesDataset.remove(mId); if (MemexState.edgesDataset.get(`e_${mId}`)) MemexState.edgesDataset.remove(`e_${mId}`);
+                });
+            }
+            delete MemexState.expandedNodes[id];
+        }
+
+        function renderVSCodeFileTree() {
+            const targets = ['map-file-explorer', 'desk-file-explorer'];
+            targets.forEach(targetId => {
+                const container = document.getElementById(targetId); if(!container) return; container.innerHTML = '';
+
+                Object.entries(MemexState.subjects).forEach(([subId, subName]) => {
+                    const isSubExpanded = MemexState.expandedNodes[subId];
+                    const folderRow = document.createElement('div');
+                    folderRow.className = 'tree-node tree-folder';
+                    folderRow.setAttribute('data-tree-type', 'subject'); folderRow.setAttribute('data-tree-id', subId);
+                    folderRow.innerHTML = `<span class="tree-arrow ${isSubExpanded ? 'expanded' : ''}">▶</span>📁 ${subName}`;
+                    
+                    folderRow.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if(MemexState.expandedNodes[subId]) collapseSubject(subId); else expandSubject(subId);
+                        renderVSCodeFileTree();
+                    });
+                    container.appendChild(folderRow);
+
+                    const articlesContainer = document.createElement('div');
+                    articlesContainer.className = `tree-children ${isSubExpanded ? 'expanded' : ''}`;
+                    
+                    Object.entries(MemexState.db).forEach(([docId, docData]) => {
+                        if (docData.parent !== subId) return;
+                        const isDocExpanded = MemexState.expandedNodes[docId];
+                        const fileRow = document.createElement('div');
+                        fileRow.className = 'tree-node tree-file';
+                        fileRow.setAttribute('data-tree-type', 'article'); fileRow.setAttribute('data-tree-id', docId);
+                        fileRow.innerHTML = `<span class="tree-arrow ${isDocExpanded ? 'expanded' : ''}">▶</span>📄 ${docData.title}`;
+                        
+                        fileRow.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if(MemexState.expandedNodes[docId]) collapseDoc(docId); else expandDoc(docId);
+                            renderVSCodeFileTree();
+                        });
+                        articlesContainer.appendChild(fileRow);
+
+                        const pagesContainer = document.createElement('div');
+                        pagesContainer.className = `tree-children ${isDocExpanded ? 'expanded' : ''}`;
+
+                        docData.pages.forEach((p, pIdx) => {
+                            const pageRow = document.createElement('div');
+                            pageRow.className = 'tree-node tree-page';
+                            pageRow.setAttribute('data-tree-type', 'page'); pageRow.setAttribute('data-tree-id', `MOON_${docId}_${pIdx}`);
+                            pageRow.innerHTML = `📝 p.${pIdx + 1}: ${p.heading}`;
+                            
+                            pageRow.addEventListener('click', (e) => {
+                                e.stopPropagation(); projectToWorkspacePane('A', docId, pIdx); switchToView('desk');
+                            });
+                            pagesContainer.appendChild(pageRow);
+                        });
+                        articlesContainer.appendChild(pagesContainer);
+                    });
+                    container.appendChild(articlesContainer);
+                });
+            });
+        }
+
+        function initSidebarContextMenuTriggers() {
+            const targetSelectors = '.map-sidebar, .desk-sidebar .sidebar-top';
+            document.querySelectorAll(targetSelectors).forEach(panel => {
+                panel.addEventListener('contextmenu', function(e) {
+                    if (e.target.closest('.platen-dropzone') || e.target.closest('.action-btn')) return;
+                    e.preventDefault(); e.stopPropagation();
+
+                    const nodeTarget = e.target.closest('[data-tree-type]');
+                    const menu = document.getElementById('sidebar-routing-menu');
+                    const label = document.getElementById('sidebar-menu-header');
+                    
+                    const optTopic = document.getElementById('ctx-create-topic');
+                    const optArticle = document.getElementById('ctx-create-article');
+                    const optPage = document.getElementById('ctx-create-page');
+                    const optProjA = document.getElementById('ctx-proj-alpha');
+                    const optProjB = document.getElementById('ctx-proj-beta');
+
+                    optTopic.style.display = 'none'; optArticle.style.display = 'none'; optPage.style.display = 'none';
+                    optProjA.style.display = 'none'; optProjB.style.display = 'none';
+
+                    if(nodeTarget) {
+                        const type = nodeTarget.getAttribute('data-tree-type'); const id = nodeTarget.getAttribute('data-tree-id');
+                        MemexState.rightClickedSidebarTarget = { type, id };
+
+                        if (type === 'subject') { label.innerText = `FOLDER: ${id}`; optTopic.style.display = 'block'; optArticle.style.display = 'block'; } 
+                        else if (type === 'article') { label.innerText = `ARTICLE FILE: ${id}`; optTopic.style.display = 'block'; optPage.style.display = 'block'; optProjA.style.display = 'block'; optProjB.style.display = 'block'; } 
+                        else if (type === 'page') { label.innerText = `PAGE TRACK`; optTopic.style.display = 'block'; optProjA.style.display = 'block'; optProjB.style.display = 'block'; }
+                    } else {
+                        MemexState.rightClickedSidebarTarget = { type: 'whitespace', id: null };
+                        label.innerText = `EXPLORER CONSOLE`; optTopic.style.display = 'block';
+                    }
+
+                    menu.style.left = `${e.pageX}px`; menu.style.top = `${e.pageY}px`; menu.style.display = 'block';
+                    document.getElementById('routing-menu').style.display = 'none';
+                });
+            });
+        }
+
+        function initLayoutResizers() {
+            setupDragInterception(document.getElementById('resizer-map'), (calculatedWidth) => {
+                document.querySelectorAll('.map-sidebar, .desk-sidebar').forEach(s => s.style.width = `${calculatedWidth}px`);
+                if (MemexState.network) MemexState.network.redraw();
+                ['A', 'B'].forEach(vp => { anchorCanvasResolution(document.getElementById(`can-doc-${vp}`)); anchorCanvasResolution(document.getElementById(`can-notes-${vp}`)); });
+            }, 240, 550, false);
+
+            setupDragInterception(document.getElementById('resizer-desk'), (calculatedWidth) => {
+                document.querySelectorAll('.map-sidebar, .desk-sidebar').forEach(s => s.style.width = `${calculatedWidth}px`);
+                if (MemexState.miniNetwork) MemexState.miniNetwork.redraw();
+                ['A', 'B'].forEach(vp => { anchorCanvasResolution(document.getElementById(`can-doc-${vp}`)); anchorCanvasResolution(document.getElementById(`can-notes-${vp}`)); });
+            }, 240, 550, false);
+
+            setupDragInterception(document.getElementById('resizer-viewports'), (calculatedWidth) => {
+                const frameA = document.getElementById('viewport-box-A');
+                const totalWorkingArea = frameA.parentElement.clientWidth;
+                frameA.style.width = `${(calculatedWidth / totalWorkingArea) * 100}%`;
+                ['A', 'B'].forEach(vp => { anchorCanvasResolution(document.getElementById(`can-doc-${vp}`)); anchorCanvasResolution(document.getElementById(`can-notes-${vp}`)); });
+            }, 20, 80, true);
+        }
+
+        function setupDragInterception(resizerElement, adjustmentCallback, boundaryMin, boundaryMax, targetPercentages = false) {
+            if(!resizerElement) return;
+            resizerElement.addEventListener('mousedown', function(e) {
+                e.preventDefault(); resizerElement.classList.add('dragging');
+                const initialMouseX = e.clientX;
+                const baseElementWidth = resizerElement.previousElementSibling.getBoundingClientRect().width;
+                const absoluteParentWidth = resizerElement.parentElement.clientWidth;
+
+                function processMouseDrag(moveEvent) {
+                    const deltaX = moveEvent.clientX - initialMouseX; let calculatedTargetWidth = baseElementWidth + deltaX;
+                    if (targetPercentages) {
+                        if (calculatedTargetWidth < absoluteParentWidth * (boundaryMin / 100)) calculatedTargetWidth = absoluteParentWidth * (boundaryMin / 100);
+                        if (calculatedTargetWidth > absoluteParentWidth * (boundaryMax / 100)) calculatedTargetWidth = absoluteParentWidth * (boundaryMax / 100);
+                    } else {
+                        if (calculatedTargetWidth < boundaryMin) calculatedTargetWidth = boundaryMin;
+                        if (calculatedTargetWidth > boundaryMax) calculatedTargetWidth = boundaryMax;
+                    }
+                    adjustmentCallback(calculatedTargetWidth);
