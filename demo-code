@@ -435,7 +435,6 @@
             white-space: pre-wrap;
         }
 
-        /* Standardized layout overlay parameters for ink environments */
         .canvas-layer { 
             position: absolute; 
             top: 0; 
@@ -447,7 +446,6 @@
             pointer-events: none; 
         }
 
-        /* UPGRADE: Structured local layout ledger stack for decoupled ink + text notes */
         .annotation-ledger-stack {
             height: 130px;
             flex-shrink: 0;
@@ -702,6 +700,7 @@
     </div>
 
     <script>
+        // Core Application State Encapsulation Object (Namespace)
         const MemexState = {
             db: {
                 "DOC_BOW": { title: "Book: Origins of the Bow", parent: "SUBJ_BALLISTICS", pages: [
@@ -720,23 +719,27 @@
             expandedNodes: {}, rightClickedContextNode: null, rightClickedSidebarTarget: null, 
             currentMiniMapFocusDoc: null, selectedMiniMapDocId: null,
             viewports: {
-                A: { tool: 'none', size: 'md', color: '#9e2a2b', pointer: null },
-                B: { tool: 'none', size: 'md', color: '#9e2a2b', pointer: null }
+                A: { docId: null, pageIdx: 0, tool: 'none', size: 'md', color: '#9e2a2b', inputMode: 'text' },
+                B: { docId: null, pageIdx: 0, tool: 'none', size: 'md', color: '#9e2a2b', inputMode: 'text' }
             }
         };
 
+/* === START OF LANDMARK: INITIALIZATION RUNTIME ENGINE === */
         window.onload = function() {
             if (typeof vis === 'undefined') {
                 document.getElementById('engine-status-tag').innerText = "CORE OFFLINE";
                 document.getElementById('engine-status-tag').style.color = "var(--crimson-alert)";
-                document.getElementById('map-view-container').innerHTML = `
-                    <div class="diagnostic-fail">
-                        <h2 style="font-family:var(--font-heading);color:var(--crimson-alert);margin-top:0;">⚠️ Graph Engine Fault</h2>
-                        <p style="font-size:0.9rem; line-height:1.6; color:var(--text-main);">
-                            The console failed to instantiate graph tracking matrices because the Vis.js library could not be loaded.
-                        </p>
-                    </div>
-                `;
+                const container = document.getElementById('map-view-container');
+                if (container) {
+                    container.innerHTML = `
+                        <div class="diagnostic-fail">
+                            <h2 style="font-family:var(--font-heading);color:var(--crimson-alert);margin-top:0;">⚠️ Graph Engine Fault</h2>
+                            <p style="font-size:0.9rem; line-height:1.6; color:var(--text-main);">
+                                The console failed to instantiate graph tracking matrices because the Vis.js library could not be loaded.
+                            </p>
+                        </div>
+                    `;
+                }
                 return;
             }
 
@@ -744,7 +747,6 @@
 
             renderVSCodeFileTree();
             
-            // Core initialization for split drawing coordinates across both canvas lines
             initDrawingCanvas('can-doc-A'); initDrawingCanvas('can-notes-A');
             initDrawingCanvas('can-doc-B'); initDrawingCanvas('can-notes-B');
             
@@ -755,16 +757,27 @@
             initGlobalResizeHooks();
             initLedgerAutoSaveSync();
             
+            // TRACKING MUTATION LAYER: Sync the handwriting canvas coordinates with note pad scroll values in real-time
+            ['A', 'B'].forEach(vp => {
+                const txtArea = document.getElementById(`txt-${vp}`);
+                const notesCan = document.getElementById(`can-notes-${vp}`);
+                if (txtArea && notesCan) {
+                    txtArea.addEventListener('scroll', () => {
+                        notesCan.style.transform = `translateY(-${txtArea.scrollTop}px)`;
+                    });
+                }
+            });
+            
             document.addEventListener('click', () => { 
-                document.getElementById('routing-menu').style.display = 'none'; 
-                document.getElementById('sidebar-routing-menu').style.display = 'none';
+                const rm = document.getElementById('routing-menu'); if (rm) rm.style.display = 'none'; 
+                const srm = document.getElementById('sidebar-routing-menu'); if (srm) srm.style.display = 'none';
             });
             
             setTimeout(() => { 
                 if (MemexState.network) { MemexState.network.setSize('100%', '100%'); MemexState.network.redraw(); MemexState.network.fit(); } 
             }, 250);
         };
-
+/* === END OF LANDMARK: INITIALIZATION RUNTIME ENGINE === */
         function initGlobalResizeHooks() {
             window.addEventListener('resize', () => {
                 if (MemexState.network) { MemexState.network.setSize('100%', '100%'); MemexState.network.redraw(); }
@@ -778,12 +791,17 @@
             const mapEl = document.getElementById('view-map');
             const deskEl = document.getElementById('view-desk');
             const btn = document.getElementById('return-map-btn');
+            
             if (viewMode === 'map') { 
-                mapEl.classList.add('active'); deskEl.classList.remove('active'); btn.style.display = 'none'; 
+                if (mapEl) mapEl.classList.add('active'); 
+                if (deskEl) deskEl.classList.remove('active'); 
+                if (btn) btn.style.display = 'none'; 
                 if (MemexState.network) MemexState.network.redraw();
             } else { 
-                deskEl.classList.add('active'); mapEl.classList.remove('active'); 
-                if (document.getElementById('screen-mode').value === 'unified') btn.style.display = 'block'; 
+                if (deskEl) deskEl.classList.add('active'); 
+                if (mapEl) mapEl.classList.remove('active'); 
+                const sm = document.getElementById('screen-mode');
+                if (sm && sm.value === 'unified' && btn) btn.style.display = 'block'; 
             }
             
             setTimeout(() => {
@@ -796,8 +814,9 @@
         }
 
         function toggleMultiScreenArchitecture(mode) {
-            if (mode === 'map-only') { switchToView('map'); document.getElementById('return-map-btn').style.display = 'none'; }
-            else if (mode === 'desk-only') { switchToView('desk'); document.getElementById('return-map-btn').style.display = 'none'; }
+            const btn = document.getElementById('return-map-btn');
+            if (mode === 'map-only') { switchToView('map'); if (btn) btn.style.display = 'none'; }
+            else if (mode === 'desk-only') { switchToView('desk'); if (btn) btn.style.display = 'none'; }
             else { switchToView('map'); }
         }
 
@@ -814,6 +833,8 @@
             });
 
             const container = document.getElementById('topology-graph');
+            if (!container) return;
+            
             MemexState.network = new vis.Network(container, { nodes: MemexState.nodesDataset, edges: MemexState.edgesDataset }, { physics: { stabilization: false, barnesHut: { gravitationalConstant: -1200, centralGravity: 0.1, springLength: 90 } } });
             MemexState.network.on("click", (p) => { if(p.nodes.length > 0) handleLeftClickNode(p.nodes[0]); });
             
@@ -835,6 +856,7 @@
             Object.entries(MemexState.db).forEach(([k, d]) => {
                 if (d.parent === id && !MemexState.nodesDataset.get(k)) {
                     const docNode = MemexState.nodesDataset.get(id);
+                    if (!docNode) return;
                     const offsetDeltaY = k.startsWith('DOC_USER_') ? 160 : (k === "DOC_BOW" ? -120 : 120);
                     MemexState.nodesDataset.add({ id: k, label: d.title, x: docNode.x, y: docNode.y + offsetDeltaY, shape: 'dot', size: 18, font: { face: 'Inter', size: 12, bold: true, color: '#1c2331' }, color: { background: '#b89047', border: '#0b1a30' }, borderWidth: 2 });
                     MemexState.edgesDataset.add({ id: `e_${k}`, from: id, to: k, color: { color: '#0b1a30', opacity: 0.4 }, width: 2 });
@@ -852,6 +874,7 @@
 
         function expandDoc(id) {
             const docNode = MemexState.nodesDataset.get(id);
+            if (!docNode) return;
             MemexState.db[id].pages.forEach((p, i) => {
                 const mId = `MOON_${id}_${i}`;
                 if (!MemexState.nodesDataset.get(mId)) {
@@ -875,135 +898,489 @@
         function renderVSCodeFileTree() {
             const targets = ['map-file-explorer', 'desk-file-explorer'];
             targets.forEach(targetId => {
-                const container = document.getElementById(targetId); if(!container) return; container.innerHTML = '';
+                const container = document.getElementById(targetId); 
+                if(!container) return; 
+                container.innerHTML = '';
 
                 Object.entries(MemexState.subjects).forEach(([subId, subName]) => {
-                    const isSubExpanded = MemexState.expandedNodes[subId];
-                    const folderRow = document.createElement('div');
-                    folderRow.className = 'tree-node tree-folder';
-                    folderRow.setAttribute('data-tree-type', 'subject'); folderRow.setAttribute('data-tree-id', subId);
-                    folderRow.innerHTML = `<span class="tree-arrow ${isSubExpanded ? 'expanded' : ''}">▶</span>📁 ${subName}`;
+                    const folderNode = document.createElement('div');
+                    folderNode.className = 'tree-node tree-folder';
                     
-                    folderRow.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        if(MemexState.expandedNodes[subId]) collapseSubject(subId); else expandSubject(subId);
-                        renderVSCodeFileTree();
-                    });
-                    container.appendChild(folderRow);
+                    const arrow = document.createElement('span');
+                    arrow.className = `tree-arrow ${MemexState.expandedNodes[subId] ? 'expanded' : ''}`;
+                    arrow.innerHTML = '▶';
+                    
+                    const label = document.createElement('span');
+                    label.innerText = ` 📁 ${subName}`;
+                    
+                    folderNode.appendChild(arrow);
+                    folderNode.appendChild(label);
+                    folderNode.onclick = (e) => { e.stopPropagation(); handleLeftClickNode(subId); };
+                    folderNode.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); showSidebarContextMenu(e.pageX, e.pageY, subId, 'subject'); };
+                    container.appendChild(folderNode);
 
-                    const articlesContainer = document.createElement('div');
-                    articlesContainer.className = `tree-children ${isSubExpanded ? 'expanded' : ''}`;
-                    
+                    const childrenBox = document.createElement('div');
+                    childrenBox.className = `tree-children ${MemexState.expandedNodes[subId] ? 'expanded' : ''}`;
+
                     Object.entries(MemexState.db).forEach(([docId, docData]) => {
-                        if (docData.parent !== subId) return;
-                        const isDocExpanded = MemexState.expandedNodes[docId];
-                        const fileRow = document.createElement('div');
-                        fileRow.className = 'tree-node tree-file';
-                        fileRow.setAttribute('data-tree-type', 'article'); fileRow.setAttribute('data-tree-id', docId);
-                        fileRow.innerHTML = `<span class="tree-arrow ${isDocExpanded ? 'expanded' : ''}">▶</span>📄 ${docData.title}`;
-                        
-                        fileRow.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            if(MemexState.expandedNodes[docId]) collapseDoc(docId); else expandDoc(docId);
-                            renderVSCodeFileTree();
-                        });
-                        articlesContainer.appendChild(fileRow);
+                        if (docData.parent === subId) {
+                            const docNode = document.createElement('div');
+                            docNode.className = 'tree-node tree-file';
+                            docNode.innerText = `📄 ${docData.title}`;
+                            docNode.onclick = (e) => { e.stopPropagation(); handleLeftClickNode(docId); };
+                            docNode.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); showSidebarContextMenu(e.pageX, e.pageY, docId, 'doc'); };
+                            childrenBox.appendChild(docNode);
 
-                        const pagesContainer = document.createElement('div');
-                        pagesContainer.className = `tree-children ${isDocExpanded ? 'expanded' : ''}`;
-
-                        docData.pages.forEach((p, pIdx) => {
-                            const pageRow = document.createElement('div');
-                            pageRow.className = 'tree-node tree-page';
-                            pageRow.setAttribute('data-tree-type', 'page'); pageRow.setAttribute('data-tree-id', `MOON_${docId}_${pIdx}`);
-                            pageRow.innerHTML = `📝 p.${pIdx + 1}: ${p.heading}`;
+                            const pagesBox = document.createElement('div');
+                            pagesBox.className = `tree-children ${MemexState.expandedNodes[docId] ? 'expanded' : ''}`;
                             
-                            pageRow.addEventListener('click', (e) => {
-                                e.stopPropagation(); projectToWorkspacePane('A', docId, pIdx); switchToView('desk');
+                            docData.pages.forEach((page, pIdx) => {
+                                const pageNode = document.createElement('div');
+                                pageNode.className = 'tree-node tree-page';
+                                pageNode.innerText = `📝 p.${pIdx + 1}: ${page.heading}`;
+                                pageNode.onclick = (e) => { e.stopPropagation(); projectToViewport('A', docId, pIdx); };
+                                pageNode.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); showSidebarContextMenu(e.pageX, e.pageY, `${docId}||${pIdx}`, 'page'); };
+                                pagesBox.appendChild(pageNode);
                             });
-                            pagesContainer.appendChild(pageRow);
-                        });
-                        articlesContainer.appendChild(pagesContainer);
+                            childrenBox.appendChild(pagesBox);
+                        }
                     });
-                    container.appendChild(articlesContainer);
+                    container.appendChild(childrenBox);
                 });
             });
+        }
+
+/* === START OF LANDMARK: PROJECT TO VIEWPORT FUNCTION === */
+function projectToViewport(vp, docId, pageIdx) {
+    if (!MemexState.db[docId]) return;
+    const doc = MemexState.db[docId];
+    if (pageIdx < 0) pageIdx = 0;
+    if (pageIdx >= doc.pages.length) pageIdx = doc.pages.length - 1;
+    
+    MemexState.viewports[vp].docId = docId;
+    MemexState.viewports[vp].pageIdx = pageIdx;
+    
+    const levers = document.getElementById(`levers-${vp}`);
+    if (levers) levers.style.display = doc.pages.length > 1 ? 'flex' : 'none';
+    
+    const meta = document.getElementById(`meta-${vp}`);
+    if (meta) meta.innerText = `${docId} // PAGE ${pageIdx + 1} OF ${doc.pages.length}`;
+    
+    const page = doc.pages[pageIdx];
+    const contentContainer = document.getElementById(`content-${vp}`);
+    if (contentContainer) {
+        contentContainer.innerHTML = `
+            <div class="editable-title" contenteditable="true" data-vp="${vp}" data-field="title">${doc.title}</div>
+            <div class="editable-subheading" contenteditable="true" data-vp="${vp}" data-field="heading">${page.heading}</div>
+            <div class="editable-body" contenteditable="true" data-vp="${vp}" data-field="body">${page.body}</div>
+        `;
+    }
+    
+    const txtArea = document.getElementById(`txt-${vp}`);
+    if (txtArea) txtArea.value = page.notesText || '';
+    
+    setTimeout(() => {
+        const docCan = document.getElementById(`can-doc-${vp}`);
+        const notesCan = document.getElementById(`can-notes-${vp}`);
+        
+        anchorCanvasResolution(docCan);
+        anchorCanvasResolution(notesCan);
+        
+        // Wipe old sketch context layers completely clear so old ink doesn't bleed through
+        if (docCan) docCan.getContext('2d').clearRect(0, 0, docCan.width, docCan.height);
+        if (notesCan) notesCan.getContext('2d').clearRect(0, 0, notesCan.width, notesCan.height);
+        
+        if (page.canvasDocData) drawBase64ToCanvas(docCan, page.canvasDocData);
+        if (page.canvasNotesData) drawBase64ToCanvas(notesCan, page.canvasNotesData);
+    }, 50);
+
+    updateMiniMap(docId);
+}
+/* === END OF LANDMARK: PROJECT TO VIEWPORT FUNCTION === */
+        function stepMicrofilmPage(vp, step) {
+            const vpState = MemexState.viewports[vp];
+            if (!vpState.docId) return;
+            projectToViewport(vp, vpState.docId, vpState.pageIdx + step);
+        }
+
+/* === START OF LANDMARK: CANVAS RESOLUTION ANCHOR FUNCTION === */
+        function anchorCanvasResolution(canvas) {
+            if (!canvas) return;
+            
+            // Lock drawing measurements onto the document's absolute scroll height instead of window viewports
+            const w = canvas.parentElement.scrollWidth || canvas.parentElement.clientWidth;
+            const h = canvas.parentElement.scrollHeight || canvas.parentElement.clientHeight;
+            
+            if (canvas.width !== w || canvas.height !== h) {
+                const tempUrl = canvas.toDataURL();
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                img.onload = () => ctx.drawImage(img, 0, 0);
+                img.src = tempUrl;
+            }
+        }
+/* === END OF LANDMARK: CANVAS RESOLUTION ANCHOR FUNCTION === */
+        function drawBase64ToCanvas(canvas, base64Str) {
+            if (!canvas || !base64Str) return;
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+            };
+            img.src = base64Str;
+        }
+
+        function initDrawingCanvas(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            let drawing = false;
+            
+            const vp = canvasId.endsWith('-A') ? 'A' : 'B';
+            const isDocCanvas = canvasId.includes('-doc-');
+            
+            function getPos(e) {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    x: (e.clientX || e.touches?.[0]?.clientX) - rect.left,
+                    y: (e.clientY || e.touches?.[0]?.clientY) - rect.top
+                };
+            }
+            
+            function startDrawing(e) {
+                const vpState = MemexState.viewports[vp];
+                if (vpState.inputMode !== 'stylus' || vpState.tool === 'none') return;
+                drawing = true;
+                ctx.beginPath();
+                const pos = getPos(e);
+                ctx.moveTo(pos.x, pos.y);
+                e.preventDefault();
+            }
+            
+            function draw(e) {
+                if (!drawing) return;
+                const vpState = MemexState.viewports[vp];
+                const pos = getPos(e);
+                
+                let size = 4;
+                if (vpState.size === 'sm') size = 2;
+                if (vpState.size === 'lg') size = 8;
+                
+                if (vpState.tool === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.lineWidth = size * 4;
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.lineWidth = size;
+                    ctx.strokeStyle = vpState.color;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                }
+                ctx.lineTo(pos.x, pos.y);
+                ctx.stroke();
+                e.preventDefault();
+            }
+            
+            function stopDrawing() {
+                if (!drawing) return;
+                drawing = false;
+                ctx.closePath();
+                serializeCanvasState(vp, isDocCanvas);
+            }
+            
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseleave', stopDrawing);
+        }
+
+        function serializeCanvasState(vp, isDocCanvas) {
+            const vpState = MemexState.viewports[vp];
+            if (!vpState.docId) return;
+            const page = MemexState.db[vpState.docId].pages[vpState.pageIdx];
+            const canvas = document.getElementById(isDocCanvas ? `can-doc-${vp}` : `can-notes-${vp}`);
+            if (!canvas) return;
+            
+            if (isDocCanvas) page.canvasDocData = canvas.toDataURL();
+            else page.canvasNotesData = canvas.toDataURL();
+        }
+
+        function setPadInputMode(vp, mode) {
+            MemexState.viewports[vp].inputMode = mode;
+            document.getElementById(`tab-txt-${vp}`).classList.toggle('active', mode === 'text');
+            document.getElementById(`can-tab-${vp}`).classList.toggle('active', mode === 'stylus');
+            
+            const displayStyle = mode === 'stylus' ? 'flex' : 'none';
+            document.getElementById(`tools-${vp}`).style.display = displayStyle;
+            document.getElementById(`colors-${vp}`).style.display = displayStyle;
+            document.getElementById(`sizes-${vp}`).style.display = displayStyle;
+            
+            document.getElementById(`can-doc-${vp}`).style.pointerEvents = mode === 'stylus' ? 'auto' : 'none';
+            document.getElementById(`can-notes-${vp}`).style.pointerEvents = mode === 'stylus' ? 'auto' : 'none';
+            if (mode === 'stylus' && MemexState.viewports[vp].tool === 'none') setStylusTool(vp, 'pen');
+        }
+
+        function setStylusTool(vp, tool) {
+            MemexState.viewports[vp].tool = tool;
+            document.getElementById(`tool-pen-${vp}`).classList.toggle('sub-active', tool === 'pen');
+            document.getElementById(`tool-era-${vp}`).classList.toggle('sub-active', tool === 'eraser');
+        }
+
+        function setStylusColor(vp, color) {
+            MemexState.viewports[vp].color = color;
+            document.getElementById(`color-red-${vp}`).classList.toggle('sub-active', color === '#9e2a2b');
+            document.getElementById(`color-navy-${vp}`).classList.toggle('sub-active', color === '#0b1a30');
+            document.getElementById(`color-gold-${vp}`).classList.toggle('sub-active', color === '#b89047');
+        }
+
+        function setStylusSize(vp, size) {
+            MemexState.viewports[vp].size = size;
+            document.getElementById(`size-sm-${vp}`).classList.toggle('sub-active', size === 'sm');
+            document.getElementById(`size-md-${vp}`).classList.toggle('sub-active', size === 'md');
+            document.getElementById(`size-lg-${vp}`).classList.toggle('sub-active', size === 'lg');
+        }
+
+        function clearActiveWorkspaceCanvases(vp) {
+            ['doc', 'notes'].forEach(layer => {
+                const canvas = document.getElementById(`can-${layer}-${vp}`);
+                if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+            });
+            const vpState = MemexState.viewports[vp];
+            if (vpState.docId) {
+                const page = MemexState.db[vpState.docId].pages[vpState.pageIdx];
+                delete page.canvasDocData; delete page.canvasNotesData;
+            }
+        }
+
+        function initInlineEditingMutationSync() {
+            document.addEventListener('input', (e) => {
+                const tgt = e.target;
+                if (!tgt || !tgt.hasAttribute('data-vp')) return;
+                
+                const vp = tgt.getAttribute('data-vp');
+                const field = tgt.getAttribute('data-field');
+                const vpState = MemexState.viewports[vp];
+                if (!vpState || !vpState.docId) return;
+                
+                const docId = vpState.docId;
+                const pageIdx = vpState.pageIdx;
+                
+                if (field === 'title') {
+                    MemexState.db[docId].title = tgt.innerText;
+                    if (MemexState.nodesDataset && MemexState.nodesDataset.get(docId)) MemexState.nodesDataset.update({ id: docId, label: tgt.innerText });
+                    renderVSCodeFileTree();
+                } else if (field === 'heading') {
+                    MemexState.db[docId].pages[pageIdx].heading = tgt.innerText;
+                    const mId = `MOON_${docId}_${pageIdx}`;
+                    if (MemexState.nodesDataset && MemexState.nodesDataset.get(mId)) MemexState.nodesDataset.update({ id: mId, label: tgt.innerText });
+                    renderVSCodeFileTree();
+                } else if (field === 'body') {
+                    MemexState.db[docId].pages[pageIdx].body = tgt.innerText;
+                }
+            });
+        }
+
+        function initLedgerAutoSaveSync() {
+            ['A', 'B'].forEach(vp => {
+                const txt = document.getElementById(`txt-${vp}`);
+                if (txt) {
+                    txt.addEventListener('input', () => {
+                        const vpState = MemexState.viewports[vp];
+                        if (vpState && vpState.docId) MemexState.db[vpState.docId].pages[vpState.pageIdx].notesText = txt.value;
+                    });
+                }
+            });
+        }
+
+        function showCustomRoutingMenu(x, y, nodeId) {
+            MemexState.rightClickedContextNode = nodeId;
+            const menu = document.getElementById('routing-menu');
+            if (!menu) return;
+            document.getElementById('menu-node-label').innerText = `NODE: ${nodeId}`;
+            menu.style.left = `${x}px`; menu.style.top = `${y}px`; menu.style.display = 'block';
+        }
+
+        function castTargetViewport(vp) {
+            const nodeId = MemexState.rightClickedContextNode;
+            if (!nodeId) return;
+            switchToView('desk');
+            if (nodeId.startsWith('MOON_')) {
+                const parts = nodeId.split('_');
+                const pageIdx = parseInt(parts.pop());
+                const docId = parts.slice(1).join('_');
+                projectToViewport(vp, docId, pageIdx);
+            } else if (MemexState.db[nodeId]) {
+                projectToViewport(vp, nodeId, 0);
+            }
+        }
+
+        function showSidebarContextMenu(x, y, targetId, type) {
+            MemexState.rightClickedSidebarTarget = { id: targetId, type: type };
+            const menu = document.getElementById('sidebar-routing-menu');
+            if (!menu) return;
+            
+            document.getElementById('sidebar-menu-header').innerText = `EXPLORER: ${type.toUpperCase()}`;
+            document.getElementById('ctx-create-topic').style.display = type === 'subject' || type === 'root' ? 'block' : 'none';
+            document.getElementById('ctx-create-article').style.display = type === 'subject' ? 'block' : 'none';
+            document.getElementById('ctx-create-page').style.display = type === 'doc' ? 'block' : 'none';
+            document.getElementById('ctx-proj-alpha').style.display = type === 'doc' || type === 'page' ? 'block' : 'none';
+            document.getElementById('ctx-proj-beta').style.display = type === 'doc' || type === 'page' ? 'block' : 'none';
+            
+            menu.style.left = `${x}px`; menu.style.top = `${y}px`; menu.style.display = 'block';
+        }
+
+        function sidebarCastTargetViewport(vp) {
+            const target = MemexState.rightClickedSidebarTarget;
+            if (!target) return;
+            switchToView('desk');
+            if (target.type === 'doc') projectToViewport(vp, target.id, 0);
+            else if (target.type === 'page') {
+                const parts = target.id.split('||');
+                projectToViewport(vp, parts[0], parseInt(parts[1]));
+            }
         }
 
         function initSidebarContextMenuTriggers() {
-            const targetSelectors = '.map-sidebar, .desk-sidebar .sidebar-top';
-            document.querySelectorAll(targetSelectors).forEach(panel => {
-                panel.addEventListener('contextmenu', function(e) {
-                    if (e.target.closest('.platen-dropzone') || e.target.closest('.action-btn')) return;
-                    e.preventDefault(); e.stopPropagation();
-
-                    const nodeTarget = e.target.closest('[data-tree-type]');
-                    const menu = document.getElementById('sidebar-routing-menu');
-                    const label = document.getElementById('sidebar-menu-header');
-                    
-                    const optTopic = document.getElementById('ctx-create-topic');
-                    const optArticle = document.getElementById('ctx-create-article');
-                    const optPage = document.getElementById('ctx-create-page');
-                    const optProjA = document.getElementById('ctx-proj-alpha');
-                    const optProjB = document.getElementById('ctx-proj-beta');
-
-                    optTopic.style.display = 'none'; optArticle.style.display = 'none'; optPage.style.display = 'none';
-                    optProjA.style.display = 'none'; optProjB.style.display = 'none';
-
-                    if(nodeTarget) {
-                        const type = nodeTarget.getAttribute('data-tree-type'); const id = nodeTarget.getAttribute('data-tree-id');
-                        MemexState.rightClickedSidebarTarget = { type, id };
-
-                        if (type === 'subject') { label.innerText = `FOLDER: ${id}`; optTopic.style.display = 'block'; optArticle.style.display = 'block'; } 
-                        else if (type === 'article') { label.innerText = `ARTICLE FILE: ${id}`; optTopic.style.display = 'block'; optPage.style.display = 'block'; optProjA.style.display = 'block'; optProjB.style.display = 'block'; } 
-                        else if (type === 'page') { label.innerText = `PAGE TRACK`; optTopic.style.display = 'block'; optProjA.style.display = 'block'; optProjB.style.display = 'block'; }
-                    } else {
-                        MemexState.rightClickedSidebarTarget = { type: 'whitespace', id: null };
-                        label.innerText = `EXPLORER CONSOLE`; optTopic.style.display = 'block';
+            ['map-file-explorer', 'desk-file-explorer'].forEach(id => {
+                const sb = document.getElementById(id);
+                if (!sb) return;
+                sb.parentElement.addEventListener('contextmenu', (e) => {
+                    if (e.target === sb || sb.contains(e.target)) {
+                        if (e.target === sb || e.target.classList.contains('section-label') || e.target.id.includes('explorer')) {
+                            e.preventDefault(); showSidebarContextMenu(e.pageX, e.pageY, 'root', 'root');
+                        }
                     }
-
-                    menu.style.left = `${e.pageX}px`; menu.style.top = `${e.pageY}px`; menu.style.display = 'block';
-                    document.getElementById('routing-menu').style.display = 'none';
                 });
             });
         }
 
-        function initLayoutResizers() {
-            setupDragInterception(document.getElementById('resizer-map'), (calculatedWidth) => {
-                document.querySelectorAll('.map-sidebar, .desk-sidebar').forEach(s => s.style.width = `${calculatedWidth}px`);
-                if (MemexState.network) MemexState.network.redraw();
-                ['A', 'B'].forEach(vp => { anchorCanvasResolution(document.getElementById(`can-doc-${vp}`)); anchorCanvasResolution(document.getElementById(`can-notes-${vp}`)); });
-            }, 240, 550, false);
-
-            setupDragInterception(document.getElementById('resizer-desk'), (calculatedWidth) => {
-                document.querySelectorAll('.map-sidebar, .desk-sidebar').forEach(s => s.style.width = `${calculatedWidth}px`);
-                if (MemexState.miniNetwork) MemexState.miniNetwork.redraw();
-                ['A', 'B'].forEach(vp => { anchorCanvasResolution(document.getElementById(`can-doc-${vp}`)); anchorCanvasResolution(document.getElementById(`can-notes-${vp}`)); });
-            }, 240, 550, false);
-
-            setupDragInterception(document.getElementById('resizer-viewports'), (calculatedWidth) => {
-                const frameA = document.getElementById('viewport-box-A');
-                const totalWorkingArea = frameA.parentElement.clientWidth;
-                frameA.style.width = `${(calculatedWidth / totalWorkingArea) * 100}%`;
-                ['A', 'B'].forEach(vp => { anchorCanvasResolution(document.getElementById(`can-doc-${vp}`)); anchorCanvasResolution(document.getElementById(`can-notes-${vp}`)); });
-            }, 20, 80, true);
+        function sidebarMechanicalCreateTopic() {
+            const name = prompt("Enter New Module Folder Name:", "ADVANCED CRYPTOGRAPHY");
+            if (!name) return;
+            const newId = "SUBJ_" + Math.random().toString(36).substr(2, 9).toUpperCase();
+            MemexState.subjects[newId] = name;
+            if (MemexState.nodesDataset) {
+                MemexState.nodesDataset.add({ id: newId, label: name, x: Math.random()*150, y: Math.random()*150, shape: 'dot', size: 30, font: { face: 'Merriweather', size: 14, bold: true, color: '#0b1a30' }, color: { background: '#0b1a30', border: '#b89047' }, borderWidth: 2 });
+            }
+            renderVSCodeFileTree();
         }
 
-        function setupDragInterception(resizerElement, adjustmentCallback, boundaryMin, boundaryMax, targetPercentages = false) {
-            if(!resizerElement) return;
-            resizerElement.addEventListener('mousedown', function(e) {
-                e.preventDefault(); resizerElement.classList.add('dragging');
-                const initialMouseX = e.clientX;
-                const baseElementWidth = resizerElement.previousElementSibling.getBoundingClientRect().width;
-                const absoluteParentWidth = resizerElement.parentElement.clientWidth;
+        function sidebarMechanicalCreateArticle() {
+            const target = MemexState.rightClickedSidebarTarget;
+            if (!target || target.type !== 'subject') return;
+            const name = prompt("Enter New Document File Title:", "Quantum Mechanics Core Draft");
+            if (!name) return;
+            const newId = "DOC_USER_" + Math.random().toString(36).substr(2, 9).toUpperCase();
+            MemexState.db[newId] = { title: name, parent: target.id, pages: [{ heading: "Initial Section Entry", body: "Draft content variables directly inside this editable console text layer..." }] };
+            expandSubject(target.id); renderVSCodeFileTree();
+        }
 
-                function processMouseDrag(moveEvent) {
-                    const deltaX = moveEvent.clientX - initialMouseX; let calculatedTargetWidth = baseElementWidth + deltaX;
-                    if (targetPercentages) {
-                        if (calculatedTargetWidth < absoluteParentWidth * (boundaryMin / 100)) calculatedTargetWidth = absoluteParentWidth * (boundaryMin / 100);
-                        if (calculatedTargetWidth > absoluteParentWidth * (boundaryMax / 100)) calculatedTargetWidth = absoluteParentWidth * (boundaryMax / 100);
-                    } else {
-                        if (calculatedTargetWidth < boundaryMin) calculatedTargetWidth = boundaryMin;
-                        if (calculatedTargetWidth > boundaryMax) calculatedTargetWidth = boundaryMax;
+        function sidebarMechanicalCreatePage() {
+            const target = MemexState.rightClickedSidebarTarget;
+            if (!target || target.type !== 'doc') return;
+            MemexState.db[target.id].pages.push({ heading: "Supplementary Appendix Log", body: "Provide alternative structural linkage tracks here." });
+            collapseDoc(target.id); expandDoc(target.id); renderVSCodeFileTree();
+        }
+
+        function insertBlankPageMechanicalLever() {
+            let activeDocId = MemexState.viewports.A.docId || Object.keys(MemexState.db)[0];
+            if (!activeDocId) return;
+            MemexState.db[activeDocId].pages.push({ heading: "New Instantiated Sheet", body: "System ready. Format uninhibited data schemas here." });
+            collapseDoc(activeDocId); expandDoc(activeDocId); renderVSCodeFileTree();
+            projectToViewport('A', activeDocId, MemexState.db[activeDocId].pages.length - 1);
+        }
+
+        /* === START OF LANDMARK: NEIGHBORHOOD MINI-MAP FIX === */
+function updateMiniMap(docId) {
+    const container = document.getElementById('mini-neighborhood-graph');
+    if (!container || typeof vis === 'undefined') return;
+    if (MemexState.miniNetwork) { MemexState.miniNetwork.destroy(); MemexState.miniNetwork = null; }
+    
+    const miniNodes = new vis.DataSet(); const miniEdges = new vis.DataSet();
+    const docData = MemexState.db[docId]; if (!docData) return;
+    
+    // 1. Style the current active document file node
+    miniNodes.add({ id: docId, label: docData.title, shape: 'dot', size: 20, color: { background: '#b89047', border: '#0b1a30' }, font: { face: 'Inter', size: 11, bold: true } });
+    
+    // 2. Style the individual sheet/page nodes connected to it
+    docData.pages.forEach((p, idx) => {
+        const pId = `MINI_P_${docId}_${idx}`;
+        miniNodes.add({ id: pId, label: `p.${idx+1}`, shape: 'dot', size: 10, color: { background: '#fdfcf7', border: '#b89047' }, font: { face: 'Fira Code', size: 9 } });
+        miniEdges.add({ from: docId, to: pId, color: '#b89047', dashed: true });
+    });
+    
+    // 3. FIX: Style the parent Topic Folder to EXACTLY match the structural parameters of the main map
+    miniNodes.add({ 
+        id: docData.parent, 
+        label: MemexState.subjects[docData.parent] || "Root", 
+        shape: 'dot', 
+        size: 30, 
+        font: { face: 'Merriweather', size: 14, bold: true, color: '#0b1a30' }, 
+        color: { background: '#0b1a30', border: '#b89047' }, 
+        borderWidth: 2 
+    });
+    miniEdges.add({ from: docData.parent, to: docId, color: '#0b1a30', width: 2 });
+    
+    MemexState.miniNetwork = new vis.Network(container, { nodes: miniNodes, edges: miniEdges }, { physics: { solver: 'repulsion', repulsion: { nodeDistance: 65 } }, interaction: { zoomView: false, dragView: true } });
+}
+/* === END OF LANDMARK: NEIGHBORHOOD MINI-MAP FIX === */
+
+        function initPlatenDragAndDropHooks() {
+            const dz = document.getElementById('platen-vault'); if (!dz) return;
+            ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.style.background = 'rgba(184, 144, 71, 0.15)'; }));
+            ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.style.background = 'rgba(184, 144, 71, 0.04)'; }));
+            dz.addEventListener('drop', (e) => { handlePlatenFileSelection(e.dataTransfer.files); });
+        }
+
+        function handlePlatenFileSelection(files) {
+            if (!files || files.length === 0) return;
+            const file = files[0]; const reader = new FileReader();
+            reader.onload = function(e) {
+                const subId = Object.keys(MemexState.subjects)[0];
+                const newDocId = "DOC_UPLOAD_" + Math.random().toString(36).substr(2, 9).toUpperCase();
+                let graphicPreview = "Raw data registry successfully parsed into ledger matrices.";
+                if (file.type.startsWith('image/')) graphicPreview = `<img src="${e.target.result}" style="max-width:100%; border-radius:4px; border:1px solid var(--border-crisp); margin-top:10px;"/>`;
+                
+                MemexState.db[newDocId] = { title: `Import: ${file.name}`, parent: subId, pages: [{ heading: "Microfilm Ledger Attachment", body: `Parameters:\nSize: ${(file.size/1024).toFixed(2)} KB\nType: ${file.type}\n\n${graphicPreview}` }] };
+                expandSubject(subId); renderVSCodeFileTree(); switchToView('desk'); projectToViewport('B', newDocId, 0);
+            };
+            if (file.type.startsWith('image/')) reader.readAsDataURL(file); else reader.readAsText(file);
+        }
+
+        function initLayoutResizers() {
+            setupResizer('resizer-map', 'map-file-explorer', true);
+            setupResizer('resizer-desk', 'desk-file-explorer', true);
+            setupResizer('resizer-viewports', 'viewport-box-A', false, 'viewport-box-B');
+        }
+
+        function setupResizer(rId, tId, isSb, peerId = null) {
+            const resizer = document.getElementById(rId); const target = document.getElementById(tId);
+            if (!resizer || !target) return;
+            resizer.addEventListener('mousedown', function(e) {
+                e.preventDefault(); resizer.classList.add('dragging');
+                const startX = e.clientX; const startWidth = target.getBoundingClientRect().width;
+                const parentWidth = resizer.parentElement.getBoundingClientRect().width;
+                
+                function drag(mEv) {
+                    const deltaX = mEv.clientX - startX;
+                    if (isSb) {
+                        let w = startWidth + deltaX; if (w < 220) w = 220; if (w > 600) w = 600;
+                        target.style.width = `${wpx}`; target.style.width = `${w}px`;
+                    } else if (peerId) {
+                        let pct = ((startWidth + deltaX) / parentWidth) * 100;
+                        if (pct < 20) pct = 20; if (pct > 80) pct = 80; target.style.width = `${pct}%`;
                     }
-                    adjustmentCallback(calculatedTargetWidth);
+                    if (MemexState.network) MemexState.network.redraw();
+                    if (MemexState.miniNetwork) MemexState.miniNetwork.redraw();
+                    ['A', 'B'].forEach(vp => { anchorCanvasResolution(document.getElementById(`can-doc-${vp}`)); anchorCanvasResolution(document.getElementById(`can-notes-${vp}`)); });
+                }
+                function stop() { resizer.classList.remove('dragging'); document.removeEventListener('mousemove', drag); document.removeEventListener('mouseup', stop); }
+                document.addEventListener('mousemove', drag); document.addEventListener('mouseup', stop);
+            });
+        }
+    </script>
+</body>
+</html>
