@@ -690,11 +690,13 @@
         <div class="menu-item" onclick="castTargetViewport('B')">➔ Project to Viewport Beta</div>
     </div>
 
-    <div class="custom-context-menu" id="sidebar-routing-menu">
+<div class="custom-context-menu" id="sidebar-routing-menu">
         <div class="menu-header" id="sidebar-menu-header">FILE SYSTEM EXPLORER</div>
         <div class="menu-item" id="ctx-create-topic" onclick="sidebarMechanicalCreateTopic()">📁 Create New Topic Folder</div>
         <div class="menu-item" id="ctx-create-article" onclick="sidebarMechanicalCreateArticle()">📄 Create New Article File</div>
         <div class="menu-item" id="ctx-create-page" onclick="sidebarMechanicalCreatePage()">📝 Append New Page Index</div>
+        <div class="menu-item" id="ctx-rename" onclick="sidebarMechanicalRename()">✏️ Rename Item</div>
+        <div class="menu-item" id="ctx-delete" onclick="sidebarMechanicalDelete()">❌ Delete Item</div>
         <div class="menu-item" id="ctx-proj-alpha" onclick="sidebarCastTargetViewport('A')">➔ Project to Viewport Alpha</div>
         <div class="menu-item" id="ctx-proj-beta" onclick="sidebarCastTargetViewport('B')">➔ Project to Viewport Beta</div>
     </div>
@@ -896,6 +898,7 @@
             renderVSCodeFileTree();
         }
 
+/* === START HIGHLIGHTING HERE FOR FOLDER TOGGLE LOGIC === */
         function expandSubject(id) {
             Object.entries(MemexState.db).forEach(([k, d]) => {
                 if (d.parent === id && !MemexState.nodesDataset.get(k)) {
@@ -907,6 +910,7 @@
                 }
             });
             MemexState.expandedNodes[id] = true;
+            if (typeof renderGlobalLinks === 'function') renderGlobalLinks();
         }
 
         function collapseSubject(id) {
@@ -914,8 +918,9 @@
                 if (d.parent === id) { if (MemexState.expandedNodes[k]) collapseDoc(k); if (MemexState.nodesDataset.get(k)) MemexState.nodesDataset.remove(k); if (MemexState.edgesDataset.get(`e_${k}`)) MemexState.edgesDataset.remove(`e_${k}`); }
             });
             delete MemexState.expandedNodes[id];
+            if (typeof renderGlobalLinks === 'function') renderGlobalLinks();
         }
-
+/* === STOP HIGHLIGHTING HERE FOR FOLDER TOGGLE LOGIC === */
         function expandDoc(id) {
             const docNode = MemexState.nodesDataset.get(id);
             if (!docNode) return;
@@ -1261,6 +1266,7 @@ function projectToViewport(vp, docId, pageIdx) {
             }
         }
 
+/* === START HIGHLIGHTING HERE FOR CONTEXT MENU VISIBILITY MODIFIERS === */
         function showSidebarContextMenu(x, y, targetId, type) {
             MemexState.rightClickedSidebarTarget = { id: targetId, type: type };
             const menu = document.getElementById('sidebar-routing-menu');
@@ -1270,12 +1276,14 @@ function projectToViewport(vp, docId, pageIdx) {
             document.getElementById('ctx-create-topic').style.display = type === 'subject' || type === 'root' ? 'block' : 'none';
             document.getElementById('ctx-create-article').style.display = type === 'subject' ? 'block' : 'none';
             document.getElementById('ctx-create-page').style.display = type === 'doc' ? 'block' : 'none';
+            document.getElementById('ctx-rename').style.display = type !== 'root' ? 'block' : 'none';
+            document.getElementById('ctx-delete').style.display = type !== 'root' ? 'block' : 'none';
             document.getElementById('ctx-proj-alpha').style.display = type === 'doc' || type === 'page' ? 'block' : 'none';
             document.getElementById('ctx-proj-beta').style.display = type === 'doc' || type === 'page' ? 'block' : 'none';
             
             menu.style.left = `${x}px`; menu.style.top = `${y}px`; menu.style.display = 'block';
         }
-
+/* === STOP HIGHLIGHTING HERE FOR CONTEXT MENU VISIBILITY MODIFIERS === */
         function sidebarCastTargetViewport(vp) {
             const target = MemexState.rightClickedSidebarTarget;
             if (!target) return;
@@ -1287,20 +1295,18 @@ function projectToViewport(vp, docId, pageIdx) {
             }
         }
 
+/* === START HIGHLIGHTING HERE FOR BROAD SIDEBAR COUPLING === */
         function initSidebarContextMenuTriggers() {
             ['map-file-explorer', 'desk-file-explorer'].forEach(id => {
                 const sb = document.getElementById(id);
                 if (!sb) return;
                 sb.parentElement.addEventListener('contextmenu', (e) => {
-                    if (e.target === sb || sb.contains(e.target)) {
-                        if (e.target === sb || e.target.classList.contains('section-label') || e.target.id.includes('explorer')) {
-                            e.preventDefault(); showSidebarContextMenu(e.pageX, e.pageY, 'root', 'root');
-                        }
-                    }
+                    e.preventDefault();
+                    showSidebarContextMenu(e.pageX, e.pageY, 'root', 'root');
                 });
             });
         }
-
+/* === STOP HIGHLIGHTING HERE FOR BROAD SIDEBAR COUPLING === */
         function sidebarMechanicalCreateTopic() {
             const name = prompt("Enter New Module Folder Name:", "ADVANCED CRYPTOGRAPHY");
             if (!name) return;
@@ -1322,6 +1328,7 @@ function projectToViewport(vp, docId, pageIdx) {
             expandSubject(target.id); renderVSCodeFileTree();
         }
 
+/* === START HIGHLIGHTING HERE FOR MECHANICAL RE-NAME AND REMOVAL ENGINES === */
         function sidebarMechanicalCreatePage() {
             const target = MemexState.rightClickedSidebarTarget;
             if (!target || target.type !== 'doc') return;
@@ -1329,6 +1336,97 @@ function projectToViewport(vp, docId, pageIdx) {
             collapseDoc(target.id); expandDoc(target.id); renderVSCodeFileTree();
         }
 
+        function sidebarMechanicalRename() {
+            const target = MemexState.rightClickedSidebarTarget;
+            if (!target || target.type === 'root') return;
+            
+            if (target.type === 'subject') {
+                const oldName = MemexState.subjects[target.id];
+                const newName = prompt("Rename Module Folder:", oldName);
+                if (newName && newName.trim() !== "") {
+                    MemexState.subjects[target.id] = newName.trim();
+                    if (MemexState.nodesDataset && MemexState.nodesDataset.get(target.id)) {
+                        MemexState.nodesDataset.update({ id: target.id, label: newName.trim() });
+                    }
+                    renderVSCodeFileTree();
+                }
+            } else if (target.type === 'doc') {
+                const oldName = MemexState.db[target.id].title;
+                const newName = prompt("Rename Document File Title:", oldName);
+                if (newName && newName.trim() !== "") {
+                    MemexState.db[target.id].title = newName.trim();
+                    if (MemexState.nodesDataset && MemexState.nodesDataset.get(target.id)) {
+                        MemexState.nodesDataset.update({ id: target.id, label: newName.trim() });
+                    }
+                    renderVSCodeFileTree();
+                }
+            } else if (target.type === 'page') {
+                const parts = target.id.split('||');
+                const docId = parts[0];
+                const pIdx = parseInt(parts[1]);
+                const oldName = MemexState.db[docId].pages[pIdx].heading;
+                const newName = prompt("Rename Page Index Heading:", oldName);
+                if (newName && newName.trim() !== "") {
+                    MemexState.db[docId].pages[pIdx].heading = newName.trim();
+                    const mId = `MOON_${docId}_${pIdx}`;
+                    if (MemexState.nodesDataset && MemexState.nodesDataset.get(mId)) {
+                        MemexState.nodesDataset.update({ id: mId, label: newName.trim() });
+                    }
+                    renderVSCodeFileTree();
+                }
+            }
+        }
+
+        function sidebarMechanicalDelete() {
+            const target = MemexState.rightClickedSidebarTarget;
+            if (!target || target.type === 'root') return;
+            
+            if (target.type === 'subject') {
+                const name = MemexState.subjects[target.id];
+                if (confirm(`Are you sure you want to completely delete the Folder "${name}" and all containing articles?`)) {
+                    Object.keys(MemexState.db).forEach(docId => {
+                        if (MemexState.db[docId].parent === target.id) {
+                            collapseDoc(docId);
+                            if (MemexState.nodesDataset && MemexState.nodesDataset.get(docId)) MemexState.nodesDataset.remove(docId);
+                            delete MemexState.db[docId];
+                        }
+                    });
+                    delete MemexState.expandedNodes[target.id];
+                    if (MemexState.nodesDataset && MemexState.nodesDataset.get(target.id)) MemexState.nodesDataset.remove(target.id);
+                    delete MemexState.subjects[target.id];
+                    renderVSCodeFileTree();
+                    if (typeof renderGlobalLinks === 'function') renderGlobalLinks();
+                }
+            } else if (target.type === 'doc') {
+                const title = MemexState.db[target.id].title;
+                if (confirm(`Are you sure you want to permanently delete the Article File "${title}"?`)) {
+                    collapseDoc(target.id);
+                    if (MemexState.nodesDataset && MemexState.nodesDataset.get(target.id)) MemexState.nodesDataset.remove(target.id);
+                    if (MemexState.edgesDataset && MemexState.edgesDataset.get(`e_${target.id}`)) MemexState.edgesDataset.remove(`e_${target.id}`);
+                    delete MemexState.db[target.id];
+                    renderVSCodeFileTree();
+                    if (typeof renderGlobalLinks === 'function') renderGlobalLinks();
+                }
+            } else if (target.type === 'page') {
+                const parts = target.id.split('||');
+                const docId = parts[0];
+                const pIdx = parseInt(parts[1]);
+                const heading = MemexState.db[docId].pages[pIdx].heading;
+                if (confirm(`Are you sure you want to slice away Page Index "${heading}"?`)) {
+                    collapseDoc(docId);
+                    MemexState.db[docId].pages.splice(pIdx, 1);
+                    if (MemexState.db[docId].pages.length === 0) {
+                        MemexState.db[docId].pages.push({ heading: "Blank Sheet", body: "Empty slate." });
+                    }
+                    expandDoc(docId);
+                    renderVSCodeFileTree();
+                }
+            }
+        }
+
+/* === STOP HIGHLIGHTING HERE FOR MECHANICAL RE-NAME AND REMOVAL ENGINES === */
+
+/* === START HIGHLIGHTING HERE FOR VIEWPORT LINKER IMPLEMENTATION === */
         function insertBlankPageMechanicalLever() {
             let activeDocId = MemexState.viewports.A.docId || Object.keys(MemexState.db)[0];
             if (!activeDocId) return;
@@ -1337,7 +1435,69 @@ function projectToViewport(vp, docId, pageIdx) {
             projectToViewport('A', activeDocId, MemexState.db[activeDocId].pages.length - 1);
         }
 
-        /* === START OF LANDMARK: NEIGHBORHOOD MINI-MAP FIX === */
+        function renderGlobalLinks() {
+            if (!MemexState.edgesDataset) return;
+            
+            // Wipe existing structural link lines from the map canvas to prevent phantom duplicates
+            const existingLinks = MemexState.edgesDataset.get({
+                filter: function (item) { return item.id && item.id.startsWith('link_'); }
+            });
+            if (existingLinks.length > 0) {
+                MemexState.edgesDataset.remove(existingLinks.map(e => e.id));
+            }
+
+            // Redraw based on current visible anchors
+            MemexState.links.forEach((linkObj, index) => {
+                // If the doc is expanded, anchor to the doc. If collapsed, fall back to its parent (the 'planet')
+                const fromAnchor = MemexState.nodesDataset.get(linkObj.from) ? linkObj.from : MemexState.db[linkObj.from].parent;
+                const toAnchor = MemexState.nodesDataset.get(linkObj.to) ? linkObj.to : MemexState.db[linkObj.to].parent;
+                
+                // Avoid drawing a looping line if both documents collapse into the exact same parent folder
+                if (fromAnchor !== toAnchor) {
+                    MemexState.edgesDataset.add({
+                        id: `link_render_${index}`,
+                        from: fromAnchor,
+                        to: toAnchor,
+                        color: { color: '#b89047', opacity: 0.85 },
+                        width: 3,
+                        physics: false, // Disables gravitational pull on these specific connections
+                        dashes: true    // Vis.js expects 'dashes', not 'dashed'
+                    });
+                }
+            });
+        }
+
+        function linkActiveDeskViewportsMechanicalLever() {
+            const docIdA = MemexState.viewports.A.docId;
+            const docIdB = MemexState.viewports.B.docId;
+            if (!docIdA || !docIdB) {
+                alert("Cannot link: Both Viewport Alpha and Viewport Beta must have documents loaded.");
+                return;
+            }
+            if (docIdA === docIdB) {
+                alert("Cannot link a document to itself.");
+                return;
+            }
+            
+            // Register link connection into archival registry array
+            const alreadyLinked = MemexState.links.some(l => 
+                (l.from === docIdA && l.to === docIdB) || (l.from === docIdB && l.to === docIdA)
+            );
+            
+            if (alreadyLinked) {
+                alert("These viewports are already linked.");
+                return;
+            }
+            
+            MemexState.links.push({ from: docIdA, to: docIdB });
+            
+            // Calculate and draw dynamic anchoring
+            renderGlobalLinks();
+            
+            alert(`Bidirectional association established:\n[${docIdA}] ↔ [${docIdB}]`);
+        }
+/* === STOP HIGHLIGHTING HERE FOR VIEWPORT LINKER IMPLEMENTATION === */        
+/* === START OF LANDMARK: NEIGHBORHOOD MINI-MAP FIX === */
 function updateMiniMap(docId) {
     const container = document.getElementById('mini-neighborhood-graph');
     if (!container || typeof vis === 'undefined') return;
@@ -1410,11 +1570,12 @@ function updateMiniMap(docId) {
                 
                 function drag(mEv) {
                     const deltaX = mEv.clientX - startX;
+/* === START HIGHLIGHTING HERE FOR RESIZER TYPO FIX === */
                     if (isSb) {
                         let w = startWidth + deltaX; if (w < 220) w = 220; if (w > 600) w = 600;
-                        target.style.width = `${wpx}`; target.style.width = `${w}px`;
+                        target.style.width = `${w}px`;
                     } else if (peerId) {
-                        let pct = ((startWidth + deltaX) / parentWidth) * 100;
+/* === STOP HIGHLIGHTING HERE FOR RESIZER TYPO FIX === */                        let pct = ((startWidth + deltaX) / parentWidth) * 100;
                         if (pct < 20) pct = 20; if (pct > 80) pct = 80; target.style.width = `${pct}%`;
                     }
                     if (MemexState.network) MemexState.network.redraw();
