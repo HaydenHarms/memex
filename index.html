@@ -1346,7 +1346,7 @@ function projectToViewport(vp, docId, pageIdx) {
     const contentContainer = document.getElementById(`content-${vp}`);
     if (contentContainer) {
         // Auto-Detect Operational Mode: Check if this file is an ingested web stream url resource tracker
-let breakoutRibbon = '';
+        let breakoutRibbon = '';
         if (docId.startsWith('DOC_NET_') && page.body) {
             const urlExtraction = page.body.match(/Source Track URL:\s*(https?:\/\/\S+)/i);
             const verifiedUrl = urlExtraction ? urlExtraction[1] : '#';
@@ -1358,10 +1358,34 @@ let breakoutRibbon = '';
                 </div>
             `;
         }
+
+        // Build Connections Ribbon HTML from State Registry
+        let connectionsRibbon = '';
+        const activeLinks = MemexState.links.filter(l => l.from === docId || l.to === docId);
+        if (activeLinks.length > 0) {
+            connectionsRibbon = `
+                <div class="document-links-panel" style="background: rgba(184, 144, 71, 0.06); border: 1px solid var(--border-crisp); padding: 6px 10px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.72rem; margin-top: 8px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+                    <span style="font-weight: bold; color: var(--gold-brass);">🔗 CONNECTIONS (Right-Click to Project):</span>
+            `;
+            activeLinks.forEach(l => {
+                const targetId = l.from === docId ? l.to : l.from;
+                const targetDoc = MemexState.db[targetId];
+                if (targetDoc) {
+                    connectionsRibbon += `
+                        <span class="conn-badge" style="background: var(--bg-main); border: 1px solid var(--gold-brass); padding: 2px 6px; border-radius: 3px; cursor: context-menu; font-weight: 600; color: var(--navy-solid); user-select: none;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showLinkConnectionMenu(event, '${targetId}');">
+                            ${targetDoc.title}
+                        </span>
+                    `;
+                }
+            });
+            connectionsRibbon += `</div>`;
+        }
+
         contentContainer.innerHTML = `
             ${breakoutRibbon}
             <div class="editable-title" contenteditable="true" data-vp="${vp}" data-field="title">${doc.title}</div>
             <div class="editable-subheading" contenteditable="true" data-vp="${vp}" data-field="heading">${page.heading}</div>
+            ${connectionsRibbon}
             <div class="editable-body" contenteditable="true" data-vp="${vp}" data-field="body">${page.body}</div>
         `;
     }
@@ -1384,6 +1408,20 @@ let breakoutRibbon = '';
     }, 50);
 
     updateMiniMap(docId);
+}
+
+// Global Context Trigger Routing for Connections Ribbon
+function showLinkConnectionMenu(e, nodeId) {
+    MemexState.rightClickedContextNode = nodeId;
+    const menu = document.getElementById('routing-menu');
+    if (!menu) return;
+    document.getElementById('menu-node-label').innerText = `NODE: ${nodeId}`;
+    document.getElementById('ctx-map-proj-alpha').style.display = 'block';
+    document.getElementById('ctx-map-proj-beta').style.display = 'block';
+    document.getElementById('ctx-map-ingest').style.display = 'none';
+    menu.style.left = `${e.pageX}px`;
+    menu.style.top = `${e.pageY}px`;
+    menu.style.display = 'block';
 }
 /* === END OF LANDMARK: PROJECT TO VIEWPORT FUNCTION === */
         function stepMicrofilmPage(vp, step) {
@@ -1894,7 +1932,7 @@ function initDrawingCanvas(canvasId) {
         }
 /* === STOP HIGHLIGHTING HERE FOR MECHANICAL RE-NAME AND REMOVAL ENGINES === */
 /* === START HIGHLIGHTING HERE FOR VIEWPORT LINKER IMPLEMENTATION === */
-        function insertBlankPageMechanicalLever() {
+function insertBlankPageMechanicalLever() {
             let activeDocId = MemexState.viewports.A.docId || Object.keys(MemexState.db)[0];
             if (!activeDocId) return;
             MemexState.db[activeDocId].pages.push({ heading: "New Instantiated Sheet", body: "System ready. Format uninhibited data schemas here." });
@@ -1960,6 +1998,10 @@ function initDrawingCanvas(canvasId) {
             
             MemexState.links.push({ from: docIdA, to: docIdB });
             renderGlobalLinks();
+            
+            // Real-Time Patch: Instantly refresh both viewports to show the newly generated link badges
+            projectToViewport('A', docIdA, MemexState.viewports.A.pageIdx);
+            projectToViewport('B', docIdB, MemexState.viewports.B.pageIdx);
             
             await showMemexDialog({ type: 'alert', message: `Bidirectional association established successfully:<br><br><strong style="font-family: var(--font-mono); color: var(--gold-brass);">[${docIdA}] ↔ [${docIdB}]</strong>` });
         }
