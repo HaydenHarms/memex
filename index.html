@@ -506,11 +506,51 @@
             background: #fff;
             border: 1px solid var(--border-crisp);
             border-top: 4px solid var(--crimson-alert);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-            border-radius: 4px;
-            text-align: center;
-        }
-    </style>
+                box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+                border-radius: 4px;
+                text-align: center;
+            }
+
+            /* === IPAD & MOBILE OPTIMIZATION LAYER === */
+            @media (max-width: 1024px) {
+                /* Expand tap areas to prevent misclicks on touch surfaces */
+                .tree-node {
+                    padding: 10px 12px;
+                    font-size: 0.88rem;
+                }
+                .tree-page {
+                    font-size: 0.82rem;
+                }
+                .view-btn, .action-btn, .lever-nav, .toggle-tab {
+                    padding: 8px 14px;
+                    font-size: 0.8rem;
+                    min-height: 35px;
+                }
+                .mode-console {
+                    gap: 8px;
+                    padding: 8px;
+                    flex-wrap: wrap;
+                }
+                /* Shift layout to a vertical stack on narrow viewport profiles */
+                .desk-screens-area {
+                    flex-direction: column !important;
+                    overflow-y: auto;
+                    gap: 15px;
+                }
+                #viewport-box-A, #viewport-box-B {
+                    width: 100% !important;
+                    height: auto !important;
+                    min-height: 500px;
+                    flex-shrink: 0;
+                }
+                #resizer-viewports {
+                    display: none !important; /* Hide vertical splitter on stacked layouts */
+                }
+                .map-sidebar, .desk-sidebar {
+                    width: 280px;
+                }
+            }
+        </style>
 </head>
 <body>
 
@@ -786,13 +826,28 @@
                 console.error("Knowledge Map initialization failed:", mapErr); 
             }
 
-            renderVSCodeFileTree();
+renderVSCodeFileTree();
             
             initDrawingCanvas('can-doc-A'); initDrawingCanvas('can-notes-A');
             initDrawingCanvas('can-doc-B'); initDrawingCanvas('can-notes-B');
             
-            initInlineEditingMutationSync();
-            initPlatenDragAndDropHooks();
+            // AUTOMATIC RESIZE OBSERVER MODULE: Dynamically snaps drawing grids to webpage and PDF extensions in real time
+['A', 'B'].forEach(vp => {
+                const innerContentPane = document.getElementById(`content-${vp}`);
+                const innerTypingBox = document.getElementById(`txt-${vp}`);
+                
+                if (innerContentPane) {
+                    new ResizeObserver(() => {
+                        anchorCanvasResolution(document.getElementById(`can-doc-${vp}`));
+                    }).observe(innerContentPane);
+                }
+                if (innerTypingBox) {
+                    new ResizeObserver(() => {
+                        anchorCanvasResolution(document.getElementById(`can-notes-${vp}`));
+                    }).observe(innerTypingBox);
+                }
+            });            
+            initInlineEditingMutationSync();            initPlatenDragAndDropHooks();
             initSidebarContextMenuTriggers();
             initLayoutResizers();
             initGlobalResizeHooks();
@@ -1291,19 +1346,18 @@ function projectToViewport(vp, docId, pageIdx) {
     const contentContainer = document.getElementById(`content-${vp}`);
     if (contentContainer) {
         // Auto-Detect Operational Mode: Check if this file is an ingested web stream url resource tracker
-        let breakoutRibbon = '';
+let breakoutRibbon = '';
         if (docId.startsWith('DOC_NET_') && page.body) {
             const urlExtraction = page.body.match(/Source Track URL:\s*(https?:\/\/\S+)/i);
             const verifiedUrl = urlExtraction ? urlExtraction[1] : '#';
             
             breakoutRibbon = `
-                <div style="background: rgba(184, 144, 71, 0.1); border: 1px solid var(--gold-brass); padding: 8px 12px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.7rem; color: var(--navy-solid); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; width: 100%;">
-                    <span>⚠️ Security parameters (X-Frame-Options) may block this site from rendering inside inline frames.</span>
-                    <a href="${verifiedUrl}" target="_blank" class="view-btn" style="text-decoration: none; white-space: nowrap; font-size: 0.65rem; padding: 4px 8px; font-weight: bold; margin-left: 10px;">LAUNCH BREAKOUT WINDOW ➔</a>
+                <div style="background: rgba(184, 144, 71, 0.05); border: 1px solid var(--border-crisp); padding: 8px 12px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-muted); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; width: 100%;">
+                    <span>📋 Displaying permanent, static dry-film visual snapshot archive of remote ledger.</span>
+                    <a href="${verifiedUrl}" target="_blank" class="view-btn" style="text-decoration: none; white-space: nowrap; font-size: 0.65rem; padding: 4px 8px; font-weight: bold; margin-left: 10px;">VISIT LIVE WEBSITE ➔</a>
                 </div>
             `;
         }
-
         contentContainer.innerHTML = `
             ${breakoutRibbon}
             <div class="editable-title" contenteditable="true" data-vp="${vp}" data-field="title">${doc.title}</div>
@@ -1339,36 +1393,77 @@ function projectToViewport(vp, docId, pageIdx) {
         }
 
 /* === START OF LANDMARK: CANVAS RESOLUTION ANCHOR FUNCTION === */
+// Unified Scaling Engine: Forces handwriting vectors to scale proportionally with window adjustments
+// Unified Adaptive Overlay Engine: Anchors ink directly to the webpage snapshot image boundaries to completely eliminate vertical drift
         function anchorCanvasResolution(canvas) {
             if (!canvas) return;
             
-            // Lock drawing measurements onto the document's absolute scroll height instead of window viewports
-            const w = canvas.parentElement.scrollWidth || canvas.parentElement.clientWidth;
-            const h = canvas.parentElement.scrollHeight || canvas.parentElement.clientHeight;
+            let w = canvas.parentElement.scrollWidth || canvas.parentElement.clientWidth;
+            let h = canvas.parentElement.scrollHeight || canvas.parentElement.clientHeight;
+            let topOffset = 0;
+            let leftOffset = 0;
+            
+            // If checking the document panel canvas on a snapshot URL track, snap directly to the image boundaries
+            if (canvas.id.includes('-doc-')) {
+                const vp = canvas.id.endsWith('-A') ? 'A' : 'B';
+                const vpState = MemexState.viewports[vp];
+                if (vpState && vpState.docId && vpState.docId.startsWith('DOC_NET_')) {
+                    const contentPane = document.getElementById(`content-${vp}`);
+                    const imgEl = contentPane ? contentPane.querySelector('img') : null;
+                    if (imgEl) {
+                        w = imgEl.offsetWidth;
+                        h = imgEl.offsetHeight;
+                        topOffset = imgEl.offsetTop;
+                        leftOffset = imgEl.offsetLeft;
+                        
+                        // Align the physical canvas layer directly over the image element frame
+                        canvas.style.width = `${w}px`;
+                        canvas.style.height = `${h}px`;
+                        canvas.style.top = `${topOffset}px`;
+                        canvas.style.left = `${leftOffset}px`;
+                    }
+                } else {
+                    // Standard fallback: Reset styles to cover the whole scrolling stack window uniformly for text files
+                    canvas.style.width = '100%';
+                    canvas.style.height = '100%';
+                    canvas.style.top = '0';
+                    canvas.style.left = '0';
+                }
+            }
             
             if (canvas.width !== w || canvas.height !== h) {
-                const tempUrl = canvas.toDataURL();
                 canvas.width = w;
                 canvas.height = h;
-                const ctx = canvas.getContext('2d');
-                const img = new Image();
-                img.onload = () => ctx.drawImage(img, 0, 0);
-                img.src = tempUrl;
+                
+                // Recover pristine raw strokes directly from State registries
+                const vp = canvas.id.endsWith('-A') ? 'A' : 'B';
+                const isDocCanvas = canvas.id.includes('-doc-');
+                const vpState = MemexState.viewports[vp];
+                
+                if (vpState && vpState.docId) {
+                    const page = MemexState.db[vpState.docId].pages[vpState.pageIdx];
+                    if (page) {
+                        const rawSourceInk = isDocCanvas ? page.canvasDocData : page.canvasNotesData;
+                        if (rawSourceInk) {
+                            drawBase64ToCanvas(canvas, rawSourceInk);
+                        }
+                    }
+                }
             }
         }
-/* === END OF LANDMARK: CANVAS RESOLUTION ANCHOR FUNCTION === */
+
         function drawBase64ToCanvas(canvas, base64Str) {
             if (!canvas || !base64Str) return;
             const ctx = canvas.getContext('2d');
             const img = new Image();
             img.onload = () => {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 0, 0);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             };
             img.src = base64Str;
         }
-
-        function initDrawingCanvas(canvasId) {
+/* === END OF LANDMARK: CANVAS RESOLUTION ANCHOR FUNCTION === */        
+function initDrawingCanvas(canvasId) {
             const canvas = document.getElementById(canvasId);
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
@@ -1388,6 +1483,7 @@ function projectToViewport(vp, docId, pageIdx) {
             function startDrawing(e) {
                 const vpState = MemexState.viewports[vp];
                 if (vpState.inputMode !== 'stylus' || vpState.tool === 'none') return;
+                
                 drawing = true;
                 ctx.beginPath();
                 const pos = getPos(e);
@@ -1426,10 +1522,31 @@ function projectToViewport(vp, docId, pageIdx) {
                 serializeCanvasState(vp, isDocCanvas);
             }
             
+            // Mouse Inputs
             canvas.addEventListener('mousedown', startDrawing);
             canvas.addEventListener('mousemove', draw);
             canvas.addEventListener('mouseup', stopDrawing);
             canvas.addEventListener('mouseleave', stopDrawing);
+
+            // iPad/Tablet Touch & Apple Pencil Inputs
+            canvas.addEventListener('touchstart', (e) => {
+                const vpState = MemexState.viewports[vp];
+                if (vpState.inputMode === 'stylus') {
+                    startDrawing(e);
+                    if (e.cancelable) e.preventDefault(); // Stop window from scrolling while drawing
+                }
+            }, { passive: false });
+
+            canvas.addEventListener('touchmove', (e) => {
+                const vpState = MemexState.viewports[vp];
+                if (vpState.inputMode === 'stylus') {
+                    draw(e);
+                    if (e.cancelable) e.preventDefault();
+                }
+            }, { passive: false });
+
+            canvas.addEventListener('touchend', stopDrawing);
+            canvas.addEventListener('touchcancel', stopDrawing);
         }
 
         function serializeCanvasState(vp, isDocCanvas) {
@@ -1453,8 +1570,19 @@ function projectToViewport(vp, docId, pageIdx) {
             document.getElementById(`colors-${vp}`).style.display = displayStyle;
             document.getElementById(`sizes-${vp}`).style.display = displayStyle;
             
-            document.getElementById(`can-doc-${vp}`).style.pointerEvents = mode === 'stylus' ? 'auto' : 'none';
-            document.getElementById(`can-notes-${vp}`).style.pointerEvents = mode === 'stylus' ? 'auto' : 'none';
+            const docCan = document.getElementById(`can-doc-${vp}`);
+            const notesCan = document.getElementById(`can-notes-${vp}`);
+            
+            if (docCan && notesCan) {
+                docCan.style.pointerEvents = mode === 'stylus' ? 'auto' : 'none';
+                notesCan.style.pointerEvents = mode === 'stylus' ? 'auto' : 'none';
+                
+                // Pre-calculate full extended scroll dimensions the moment stylus controls activate
+                if (mode === 'stylus') {
+                    anchorCanvasResolution(docCan);
+                    anchorCanvasResolution(notesCan);
+                }
+            }
             if (mode === 'stylus' && MemexState.viewports[vp].tool === 'none') setStylusTool(vp, 'pen');
         }
 
@@ -1910,19 +2038,23 @@ function updateMiniMap(docId) {
                     targetUrl = 'https://' + targetUrl;
                 }
                 
-                const newDocId = "DOC_NET_" + Math.random().toString(36).substr(2, 9).toUpperCase();
-                const iframePreview = `<iframe src="${targetUrl}" style="width:100%; height:650px; border:1px solid var(--border-crisp); border-radius:4px; margin-top:10px;" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>`;
-                const cleanTitle = targetUrl.replace(/^https?:\/\/(www\.)?/i, '');
-                
-                MemexState.db[newDocId] = { 
-                    title: `Link: ${cleanTitle.substring(0, 26)}${cleanTitle.length > 26 ? '...' : ''}`, 
-                    parent: subId, 
-                    pages: [{ 
-                        heading: "Live Remote Web Interface", 
-                        body: `Source Track URL: ${targetUrl}\n\n${iframePreview}` 
-                    }] 
-                };
-                
+const newDocId = "DOC_NET_" + Math.random().toString(36).substr(2, 9).toUpperCase();
+            
+            // Append a unique hardware timestamp to the web target to bust server side caches instantly
+            const unifiedBusterUrl = targetUrl + (targetUrl.includes('?') ? '&' : '?') + 'memex_cache_ref=anon_' + Date.now();
+            
+            // Maximize viewport height to 14000px to expand long essays completely while staying under Chrome's 16384px crash boundary
+            const snapshotServiceUrl = `https://api.microlink.io/?url=${encodeURIComponent(unifiedBusterUrl)}&screenshot=true&screenshot.fullPage=true&viewport.width=1280&viewport.height=14000&embed=screenshot.url&nocache=${Date.now()}`;
+            const snapshotPreview = `<img src="${snapshotServiceUrl}" alt="Web Capture Platen" style="max-width:100%; height:auto; display:block; border-radius:4px; border:1px solid var(--border-crisp); margin-top:10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);" />`;
+
+            const cleanTitle = targetUrl.replace(/^https?:\/\/(www\.)?/i, '');            MemexState.db[newDocId] = { 
+                title: `Snap: ${cleanTitle.substring(0, 26)}${cleanTitle.length > 26 ? '...' : ''}`, 
+                parent: subId, 
+                pages: [{ 
+                    heading: "Archival Document Snapshot", 
+                    body: `Source Track URL: ${targetUrl}\n\n${snapshotPreview}` 
+                }] 
+            };
                 expandSubject(subId); 
                 renderVSCodeFileTree(); 
                 switchToView('desk'); 
@@ -1944,7 +2076,8 @@ function updateMiniMap(docId) {
                 if (file.type.startsWith('image/')) {
                     graphicPreview = `<img src="${e.target.result}" style="max-width:100%; border-radius:4px; border:1px solid var(--border-crisp); margin-top:10px;"/>`;
                 } else if (file.type === 'application/pdf') {
-                    graphicPreview = `<iframe src="${e.target.result}" style="width:100%; height:650px; border:1px solid var(--border-crisp); border-radius:4px; margin-top:10px;" type="application/pdf"></iframe>`;
+                    // Revert from the custom iframe workaround back to a stable, native object layout component
+                    graphicPreview = `<object data="${e.target.result}" type="application/pdf" style="width:100%; height:750px; border:1px solid var(--border-crisp); border-radius:4px; margin-top:10px;"></object>`;
                 }
                 
                 MemexState.db[newDocId] = { title: `Import: ${file.name}`, parent: subId, pages: [{ heading: "Microfilm Ledger Attachment", body: `Parameters:\nSize: ${(file.size/1024).toFixed(2)} KB\nType: ${file.type}\n\n${graphicPreview}` }] };
@@ -1968,13 +2101,15 @@ function updateMiniMap(docId) {
         function setupResizer(rId, tId, isSb, peerId = null) {
             const resizer = document.getElementById(rId); const target = document.getElementById(tId);
             if (!resizer || !target) return;
-            resizer.addEventListener('mousedown', function(e) {
-                e.preventDefault(); resizer.classList.add('dragging');
-                const startX = e.clientX; const startWidth = target.getBoundingClientRect().width;
+            // Shared Execution Pipeline for Mouse and Touch Movements
+            function initiateResizeTracking(clientX) {
+                resizer.classList.add('dragging');
+                const startX = clientX; 
+                const startWidth = target.getBoundingClientRect().width;
                 const parentWidth = resizer.parentElement.getBoundingClientRect().width;
                 
-                function drag(mEv) {
-                    const deltaX = mEv.clientX - startX;
+                function executeResizeCalculation(currentX) {
+                    const deltaX = currentX - startX;
                     if (isSb) {
                         let w = startWidth + deltaX; if (w < 220) w = 220; if (w > 600) w = 600;
                         target.style.width = `${w}px`;
@@ -1986,8 +2121,28 @@ function updateMiniMap(docId) {
                     if (MemexState.miniNetwork) MemexState.miniNetwork.redraw();
                     ['A', 'B'].forEach(vp => { anchorCanvasResolution(document.getElementById(`can-doc-${vp}`)); anchorCanvasResolution(document.getElementById(`can-notes-${vp}`)); });
                 }
-                function stop() { resizer.classList.remove('dragging'); document.removeEventListener('mousemove', drag); document.removeEventListener('mouseup', stop); }
-                document.addEventListener('mousemove', drag); document.addEventListener('mouseup', stop);
+                
+                return executeResizeCalculation;
+            }
+
+            // Mouse Interface Bindings
+            resizer.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                const trackMovement = initiateResizeTracking(e.clientX);
+                function onMouseMove(mEv) { trackMovement(mEv.clientX); }
+                function onMouseUp() { resizer.classList.remove('dragging'); document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp); }
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+
+            // Touch Interface Bindings (iPad Gesture Support)
+            resizer.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 0) return;
+                const trackMovement = initiateResizeTracking(e.touches[0].clientX);
+                function onTouchMove(tEv) { if (tEv.touches.length > 0) trackMovement(tEv.touches[0].clientX); }
+                function onTouchEnd() { resizer.classList.remove('dragging'); document.removeEventListener('touchmove', onTouchMove); document.removeEventListener('touchend', onTouchEnd); }
+                document.addEventListener('touchmove', onTouchMove, { passive: true });
+                document.addEventListener('touchend', onTouchEnd);
             });
         }
     </script>
