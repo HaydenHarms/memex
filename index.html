@@ -603,7 +603,8 @@
                 </div>
 
 <button class="action-btn" style="margin-top: 5px;" onclick="insertBlankPageMechanicalLever()">+ Insert New Page</button>
-                <button class="action-btn" style="margin-top: 5px; background: rgba(184,144,71,0.1); border-color: var(--gold-brass);" onclick="linkActiveDeskViewportsMechanicalLever()">🔗 Link Active Viewports (A ↔ B)</button>            </div>
+                <button class="action-btn" style="margin-top: 5px; background: rgba(184,144,71,0.1); border-color: var(--gold-brass);" onclick="linkActiveDeskViewportsMechanicalLever()">🔗 Link Active Viewports (A ↔ B)</button>
+                <button class="action-btn" id="memex-toggle-pages-btn" style="margin-top: 5px; background: rgba(158, 42, 43, 0.05); border-color: var(--border-crisp);" onclick="togglePageVisibilityMechanicalLever()">👁️ Hide Page Nodes</button>            </div>
             <div class="sidebar-bottom" id="mini-map-container">
                 <div class="section-label" style="position: absolute; top: 15px; left: 20px; z-index: 5; border: none;">Neighborhood Mini-Map</div>
                 <div id="mini-neighborhood-graph"></div>
@@ -725,11 +726,12 @@
         </div>
     </div>
 
-    <div class="custom-context-menu" id="routing-menu">
+<div class="custom-context-menu" id="routing-menu">
         <div class="menu-header" id="menu-node-label">VIEWPORT COMPILATION DATA</div>
         <div class="menu-item" id="ctx-map-proj-alpha" onclick="castTargetViewport('A')">➔ Project to Viewport Alpha</div>
         <div class="menu-item" id="ctx-map-proj-beta" onclick="castTargetViewport('B')">➔ Project to Viewport Beta</div>
         <div class="menu-item" id="ctx-map-ingest" onclick="mapMechanicalIngestDocument()">📥 Ingest Document / URL</div>
+        <div class="menu-item" id="ctx-map-toggle-pages" style="border-top:1px dashed var(--border-crisp); color:var(--crimson-alert);" onclick="togglePageVisibilityMechanicalLever()">👁️ Hide Page Nodes</div>
     </div>
 
     <div class="custom-context-menu" id="sidebar-routing-menu">
@@ -742,8 +744,39 @@
         <div class="menu-item" id="ctx-delete" onclick="sidebarMechanicalDelete()">❌ Delete Item</div>
         <div class="menu-item" id="ctx-proj-alpha" onclick="sidebarCastTargetViewport('A')">➔ Project to Viewport Alpha</div>
         <div class="menu-item" id="ctx-proj-beta" onclick="sidebarCastTargetViewport('B')">➔ Project to Viewport Beta</div>
+        <div class="menu-item" id="ctx-sidebar-toggle-pages" style="border-top:1px dashed var(--border-crisp); color:var(--crimson-alert);" onclick="togglePageVisibilityMechanicalLever()">👁️ Hide Page Nodes</div>
     </div>
+    ```
 
+---
+
+## Modification 2: Inject Toggle Text State Sync Into Map Node Click Menu
+
+### Pinpoint the Location
+* **Target Area:** Go to approximately **Line 316 to Line 335**.
+* **How to get there:** Press **Ctrl + G**, type `316`, and press Enter. Look for `function showCustomRoutingMenu(x, y, nodeId)` inside your main map instantiation layout loop.
+
+### Code to be Replaced
+Highlight and delete the logic block inside that routine:
+
+```javascript
+            function showCustomRoutingMenu(x, y, nodeId) {
+            MemexState.rightClickedContextNode = nodeId;
+            const menu = document.getElementById('routing-menu');
+            if (!menu) return;
+            
+            // Check if user targeted a Topic Folder or a micro-page element sheet
+            const isSubjectId = !!MemexState.subjects[nodeId];
+            document.getElementById('menu-node-label').innerText = isSubjectId ? `FOLDER: ${nodeId}` : `NODE: ${nodeId}`;
+            
+            // Morph layout visibility structures in real-time depending on selected asset parameter
+            document.getElementById('ctx-map-proj-alpha').style.display = isSubjectId ? 'none' : 'block';
+            document.getElementById('ctx-map-proj-beta').style.display = isSubjectId ? 'none' : 'block';
+            document.getElementById('ctx-map-ingest').style.display = isSubjectId ? 'block' : 'none';
+            
+            /* === CRITICAL FIX START: CLOSE TOPOLOGY MAP & ADD INTERACTION INTERFACES === */
+            menu.style.left = `${x}px`; menu.style.top = `${y}px`; menu.style.display = 'block';
+        }
     <div id="memex-modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(11, 26, 48, 0.4); backdrop-filter: blur(2px); z-index: 2000; justify-content: center; align-items: center;">
         <div style="background: var(--bg-main); border: 2px solid var(--gold-brass); box-shadow: 0 12px 40px rgba(11, 26, 48, 0.25); border-radius: 4px; width: 440px; max-width: 90%; overflow: hidden; font-family: var(--font-body);">
             <div id="memex-modal-header" style="background: var(--navy-solid); color: #ffffff; padding: 10px 15px; font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.5px; border-bottom: 1px solid var(--gold-brass);">MEMEX // SYSTEM DIALOGUE</div>
@@ -761,7 +794,7 @@
     <script>       
 // Core Application State Encapsulation Object (Namespace)
 /* === START OF LANDMARK: STATE REGISTER ARCHITECTURE === */
-        const MemexState = {
+const MemexState = {
             db: {
                 "DOC_BOW": { title: "Book: Origins of the Bow", parent: "SUBJ_BALLISTICS", pages: [
                     { heading: "Origins of the Ballistic Stave", body: "The mechanical efficiency of archery tracks directly to the late Paleolithic era. Early constructs prioritized raw, single-stave wood design parameters to force dynamic kinetic energy yield." },
@@ -775,7 +808,8 @@
                 ]}
             },
             subjects: { "SUBJ_BALLISTICS": "BALLISTICS & ARCHERY", "SUBJ_PHYSICS": "MATERIALS & MECHANICS" },
-            links: [], // NEW ARCHIVAL REGISTRY SLOT: Holds cross-link arrays
+            links: [], 
+            hidePages: false, // Core visibility toggle flag parameter
             network: null, miniNetwork: null, nodesDataset: null, edgesDataset: null,
             expandedNodes: {}, rightClickedContextNode: null, rightClickedSidebarTarget: null, 
             currentMiniMapFocusDoc: null, selectedMiniMapDocId: null,
@@ -1082,15 +1116,16 @@ renderVSCodeFileTree();
             if (!docNode) return; // Quietly exit canvas rendering if looking at Desk mode or if folder is collapsed
             
             // 1. Plot ordinary child sheets (Pages)
-            MemexState.db[id].pages.forEach((p, i) => {
-                const mId = `MOON_${id}_${i}`;
-                if (!MemexState.nodesDataset.get(mId)) {
-                    const offsetDelta = (i - (MemexState.db[id].pages.length - 1) / 2) * 110;
-                    MemexState.nodesDataset.add({ id: mId, label: p.heading, x: docNode.x + offsetDelta, y: docNode.y + (docNode.y < 0 ? -90 : 90), shape: 'dot', size: 12, font: { face: 'Fira Code', size: 10, color: '#b89047' }, color: { background: '#fdfcf7', border: '#b89047' }, borderWidth: 2 });
-                    MemexState.edgesDataset.add({ id: `e_${mId}`, from: id, to: mId, color: { color: '#b89047', opacity: 0.7 }, width: 1.5, dashed: true });
-                }
-            });
-
+if (!MemexState.hidePages) {
+                MemexState.db[id].pages.forEach((p, i) => {
+                    const mId = `MOON_${id}_${i}`;
+                    if (!MemexState.nodesDataset.get(mId)) {
+                        const offsetDelta = (i - (MemexState.db[id].pages.length - 1) / 2) * 110;
+                        MemexState.nodesDataset.add({ id: mId, label: p.heading, x: docNode.x + offsetDelta, y: docNode.y + (docNode.y < 0 ? -90 : 90), shape: 'dot', size: 12, font: { face: 'Fira Code', size: 10, color: '#b89047' }, color: { background: '#fdfcf7', border: '#b89047' }, borderWidth: 2 });
+                        MemexState.edgesDataset.add({ id: `e_${mId}`, from: id, to: mId, color: { color: '#b89047', opacity: 0.7 }, width: 1.5, dashed: true });
+                    }
+                });
+            }
             // 2. Plot nested full Article Files linked in a linear associative trail branch
             Object.entries(MemexState.db).forEach(([k, d]) => {
                 if (d.parent === id && !MemexState.nodesDataset.get(k)) {
@@ -1261,7 +1296,8 @@ renderVSCodeFileTree();
                     const pagesBox = document.createElement('div');
                     pagesBox.className = `tree-children ${MemexState.expandedNodes[docId] ? 'expanded' : ''}`;
                     
-                    docData.pages.forEach((page, pIdx) => {
+docData.pages.forEach((page, pIdx) => {
+                        if (MemexState.hidePages) return; // Suppression gate path
                         const pageNode = document.createElement('div');
                         pageNode.className = 'tree-node tree-page';
                         pageNode.style.paddingLeft = `${32 + (depth * 14)}px`;
@@ -1381,12 +1417,64 @@ function projectToViewport(vp, docId, pageIdx) {
             connectionsRibbon += `</div>`;
         }
 
+        // Media Separation Matrix Layer: Isolates embedded objects from contenteditable text suppression
+        let textBody = page.body || '';
+        let mediaOverlay = '';
+        if (textBody && (textBody.includes('<iframe') || textBody.includes('<img') || textBody.includes('<object'))) {
+            try {
+                const parsingSandbox = document.createElement('div');
+                parsingSandbox.innerHTML = textBody;
+                
+                const targetIframe = parsingSandbox.querySelector('iframe');
+                const targetImg = parsingSandbox.querySelector('img');
+                const targetObject = parsingSandbox.querySelector('object');
+                
+                if (targetIframe) {
+                    let sourcePointer = targetIframe.getAttribute('src') || '';
+                    // If target source uses a blocked Base64 string, convert it dynamically to a secure Object Stream
+                    if (sourcePointer.startsWith('data:application/pdf;base64,')) {
+                        const base64Payload = sourcePointer.split(',')[1];
+                        const binaryBuffer = atob(base64Payload);
+                        const dataArray = new Uint8Array(binaryBuffer.length);
+                        for (let i = 0; i < binaryBuffer.length; i++) {
+                            dataArray[i] = binaryBuffer.charCodeAt(i);
+                        }
+                        const binaryBlob = new Blob([dataArray], { type: 'application/pdf' });
+                        sourcePointer = URL.createObjectURL(binaryBlob);
+                    }
+                    mediaOverlay = `<iframe src="${sourcePointer}" contenteditable="false" style="width:100%; height:800px; border:1px solid var(--border-crisp); border-radius:4px; margin-top:12px;"></iframe>`;
+                    targetIframe.remove();
+                } else if (targetImg) {
+                    mediaOverlay = targetImg.outerHTML;
+                    targetImg.remove();
+                } else if (targetObject) {
+                    let dataPointer = targetObject.getAttribute('data') || '';
+                    if (dataPointer.startsWith('data:application/pdf;base64,')) {
+                        const base64Payload = dataPointer.split(',')[1];
+                        const binaryBuffer = atob(base64Payload);
+                        const dataArray = new Uint8Array(binaryBuffer.length);
+                        for (let i = 0; i < binaryBuffer.length; i++) {
+                            dataArray[i] = binaryBuffer.charCodeAt(i);
+                        }
+                        const binaryBlob = new Blob([dataArray], { type: 'application/pdf' });
+                        dataPointer = URL.createObjectURL(binaryBlob);
+                    }
+                    mediaOverlay = `<iframe src="${dataPointer}" contenteditable="false" style="width:100%; height:800px; border:1px solid var(--border-crisp); border-radius:4px; margin-top:12px;"></iframe>`;
+                    targetObject.remove();
+                }
+                textBody = parsingSandbox.innerHTML;
+            } catch (mediaErr) {
+                console.error("Media translation matrix failure:", mediaErr);
+            }
+        }
+
         contentContainer.innerHTML = `
             ${breakoutRibbon}
             <div class="editable-title" contenteditable="true" data-vp="${vp}" data-field="title">${doc.title}</div>
             <div class="editable-subheading" contenteditable="true" data-vp="${vp}" data-field="heading">${page.heading}</div>
             ${connectionsRibbon}
-            <div class="editable-body" contenteditable="true" data-vp="${vp}" data-field="body">${page.body}</div>
+            <div class="editable-body" contenteditable="true" data-vp="${vp}" data-field="body">${textBody}</div>
+            ${mediaOverlay}
         `;
     }
     
@@ -1419,6 +1507,10 @@ function showLinkConnectionMenu(e, nodeId) {
     document.getElementById('ctx-map-proj-alpha').style.display = 'block';
     document.getElementById('ctx-map-proj-beta').style.display = 'block';
     document.getElementById('ctx-map-ingest').style.display = 'none';
+    
+    const mToggle = document.getElementById('ctx-map-toggle-pages');
+    if (mToggle) mToggle.innerText = MemexState.hidePages ? "👁️ Show Page Nodes" : "👁️ Hide Page Nodes";
+    
     menu.style.left = `${e.pageX}px`;
     menu.style.top = `${e.pageY}px`;
     menu.style.display = 'block';
@@ -1734,9 +1826,11 @@ function initDrawingCanvas(canvasId) {
             document.getElementById('ctx-proj-alpha').style.display = type === 'doc' || type === 'page' ? 'block' : 'none';
             document.getElementById('ctx-proj-beta').style.display = type === 'doc' || type === 'page' ? 'block' : 'none';
             
+            const sbToggle = document.getElementById('ctx-sidebar-toggle-pages');
+            if (sbToggle) sbToggle.innerText = MemexState.hidePages ? "👁️ Show Page Nodes" : "👁️ Hide Page Nodes";
+            
             menu.style.left = `${x}px`; menu.style.top = `${y}px`; menu.style.display = 'block';
         }
-
 /* === STOP HIGHLIGHTING HERE FOR CONTEXT MENU VISIBILITY MODIFIERS === */
         function sidebarCastTargetViewport(vp) {
             const target = MemexState.rightClickedSidebarTarget;
@@ -2003,7 +2097,40 @@ function insertBlankPageMechanicalLever() {
             projectToViewport('A', docIdA, MemexState.viewports.A.pageIdx);
             projectToViewport('B', docIdB, MemexState.viewports.B.pageIdx);
             
-            await showMemexDialog({ type: 'alert', message: `Bidirectional association established successfully:<br><br><strong style="font-family: var(--font-mono); color: var(--gold-brass);">[${docIdA}] ↔ [${docIdB}]</strong>` });
+await showMemexDialog({ type: 'alert', message: `Bidirectional association established successfully:<br><br><strong style="font-family: var(--font-mono); color: var(--gold-brass);">[${docIdA}] ↔ [${docIdB}]</strong>` });
+        }
+function togglePageVisibilityMechanicalLever() {
+            MemexState.hidePages = !MemexState.hidePages;
+            
+            const txtLabel = MemexState.hidePages ? "👁️ Show Page Nodes" : "👁️ Hide Page Nodes";
+            
+            // Sync all UI tracking hooks uniformly
+            const btn = document.getElementById('memex-toggle-pages-btn');
+            if (btn) btn.innerText = txtLabel;
+            
+            const mToggle = document.getElementById('ctx-map-toggle-pages');
+            if (mToggle) mToggle.innerText = txtLabel;
+            
+            const sbToggle = document.getElementById('ctx-sidebar-toggle-pages');
+            if (sbToggle) sbToggle.innerText = txtLabel;
+            
+            if (MemexState.hidePages && MemexState.nodesDataset) {
+                const allNodes = MemexState.nodesDataset.get();
+                allNodes.forEach(node => {
+                    if (typeof node.id === 'string' && node.id.startsWith('MOON_')) {
+                        MemexState.nodesDataset.remove(node.id);
+                        if (MemexState.edgesDataset.get(`e_${node.id}`)) {
+                            MemexState.edgesDataset.remove(`e_${node.id}`);
+                        }
+                    }
+                });
+            } else {
+                Object.keys(MemexState.expandedNodes).forEach(id => {
+                    if (MemexState.db[id]) expandDoc(id);
+                });
+            }
+            
+            renderVSCodeFileTree();
         }
 /* === STOP HIGHLIGHTING HERE FOR VIEWPORT LINKER IMPLEMENTATION === */
 /* === START OF LANDMARK: NEIGHBORHOOD MINI-MAP FIX === */
@@ -2107,7 +2234,7 @@ const newDocId = "DOC_NET_" + Math.random().toString(36).substr(2, 9).toUpperCas
             }
         }
 
-        function handlePlatenFileSelection(files) {
+function handlePlatenFileSelection(files) {
             if (!files || files.length === 0) return;
             const file = files[0]; const reader = new FileReader();
             reader.onload = function(e) {
@@ -2118,8 +2245,8 @@ const newDocId = "DOC_NET_" + Math.random().toString(36).substr(2, 9).toUpperCas
                 if (file.type.startsWith('image/')) {
                     graphicPreview = `<img src="${e.target.result}" style="max-width:100%; border-radius:4px; border:1px solid var(--border-crisp); margin-top:10px;"/>`;
                 } else if (file.type === 'application/pdf') {
-                    // Revert from the custom iframe workaround back to a stable, native object layout component
-                    graphicPreview = `<object data="${e.target.result}" type="application/pdf" style="width:100%; height:750px; border:1px solid var(--border-crisp); border-radius:4px; margin-top:10px;"></object>`;
+                    // Shield PDF Plugin: Explicitly inject contenteditable="false" inside an iframe layout to bypass viewport text editor suppression
+                    graphicPreview = `<iframe src="${e.target.result}" contenteditable="false" style="width:100%; height:750px; border:1px solid var(--border-crisp); border-radius:4px; margin-top:10px;"></iframe>`;
                 }
                 
                 MemexState.db[newDocId] = { title: `Import: ${file.name}`, parent: subId, pages: [{ heading: "Microfilm Ledger Attachment", body: `Parameters:\nSize: ${(file.size/1024).toFixed(2)} KB\nType: ${file.type}\n\n${graphicPreview}` }] };
@@ -2133,7 +2260,6 @@ const newDocId = "DOC_NET_" + Math.random().toString(36).substr(2, 9).toUpperCas
                 reader.readAsText(file);
             }
         }
-
         function initLayoutResizers() {
             setupResizer('resizer-map', 'map-file-explorer', true);
             setupResizer('resizer-desk', 'desk-file-explorer', true);
