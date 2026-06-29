@@ -789,7 +789,7 @@ const MemexState = {
         };
 /* === END OF LANDMARK: STATE REGISTER ARCHITECTURE === */
 /* === START OF LANDMARK: INITIALIZATION RUNTIME ENGINE === */
-        window.onload = function() {
+window.onload = function() {
             // 1. PERSISTENCE LAYER: Immediately look into browser memory and recover historical saves if they exist
             if (localStorage.getItem('memex_saved_db')) {
                 MemexState.db = JSON.parse(localStorage.getItem('memex_saved_db'));
@@ -800,6 +800,25 @@ const MemexState = {
             /* === LINK PERSISTENCE PATCH: RECOVER SAVED REGISTRIES === */
             if (localStorage.getItem('memex_saved_links')) {
                 MemexState.links = JSON.parse(localStorage.getItem('memex_saved_links'));
+            }
+            /* === EXPANSION PERSISTENCE PATCH: RECOVER STATE HISTORY === */
+            if (localStorage.getItem('memex_saved_expanded_nodes')) {
+                MemexState.expandedNodes = JSON.parse(localStorage.getItem('memex_saved_expanded_nodes'));
+            }
+            /* === PAGE VISIBILITY PERSISTENCE PATCH: RECOVER VISIBILITY LAYER === */
+            if (localStorage.getItem('memex_saved_hide_pages')) {
+                MemexState.hidePages = JSON.parse(localStorage.getItem('memex_saved_hide_pages'));
+                
+                // 同步初始化所有 UI 按鈕與右鍵選單的文字狀態
+                const startupLabel = MemexState.hidePages ? "👁️ Show Page Nodes" : "👁️ Hide Page Nodes";
+                setTimeout(() => {
+                    const btn = document.getElementById('memex-toggle-pages-btn');
+                    if (btn) btn.innerText = startupLabel;
+                    const mToggle = document.getElementById('ctx-map-toggle-pages');
+                    if (mToggle) mToggle.innerText = startupLabel;
+                    const sbToggle = document.getElementById('ctx-sidebar-toggle-pages');
+                    if (sbToggle) sbToggle.innerText = startupLabel;
+                }, 50);
             }
 
             if (typeof vis === 'undefined') {
@@ -825,17 +844,26 @@ const MemexState = {
                 if (typeof renderGlobalLinks === 'function') {
                     renderGlobalLinks();
                 }
+                
+                // Hydrate Map Canvas Layout Nodes from Cched Expansion Histories
+                Object.keys(MemexState.expandedNodes).forEach(nodeId => {
+                    if (MemexState.subjects[nodeId]) {
+                        expandSubject(nodeId);
+                    } else if (MemexState.db[nodeId]) {
+                        expandDoc(nodeId);
+                    }
+                });
             } catch (mapErr) { 
                 console.error("Knowledge Map initialization failed:", mapErr); 
             }
 
-renderVSCodeFileTree();
+            renderVSCodeFileTree();
             
             initDrawingCanvas('can-doc-A'); initDrawingCanvas('can-notes-A');
             initDrawingCanvas('can-doc-B'); initDrawingCanvas('can-notes-B');
             
             // AUTOMATIC RESIZE OBSERVER MODULE: Dynamically snaps drawing grids to webpage and PDF extensions in real time
-['A', 'B'].forEach(vp => {
+            ['A', 'B'].forEach(vp => {
                 const innerContentPane = document.getElementById(`content-${vp}`);
                 const innerTypingBox = document.getElementById(`txt-${vp}`);
                 
@@ -850,7 +878,8 @@ renderVSCodeFileTree();
                     }).observe(innerTypingBox);
                 }
             });            
-            initInlineEditingMutationSync();            initPlatenDragAndDropHooks();
+            initInlineEditingMutationSync();            
+            initPlatenDragAndDropHooks();
             initSidebarContextMenuTriggers();
             initLayoutResizers();
             initGlobalResizeHooks();
@@ -873,6 +902,10 @@ renderVSCodeFileTree();
                 localStorage.setItem('memex_saved_subjects', JSON.stringify(MemexState.subjects));
                 /* === LINK PERSISTENCE PATCH: AUTO-SAVE LINK ENTRIES === */
                 localStorage.setItem('memex_saved_links', JSON.stringify(MemexState.links));
+                /* === EXPANSION PERSISTENCE PATCH: AUTO-SAVE CONFIGURATIONS === */
+                localStorage.setItem('memex_saved_expanded_nodes', JSON.stringify(MemexState.expandedNodes));
+                /* === PAGE VISIBILITY PERSISTENCE PATCH: AUTO-SAVE VISIBILITY LAYER === */
+                localStorage.setItem('memex_saved_hide_pages', JSON.stringify(MemexState.hidePages));
             }, 2000);
             
             document.addEventListener('click', () => { 
@@ -880,7 +913,7 @@ renderVSCodeFileTree();
                 const srm = document.getElementById('sidebar-routing-menu'); if (srm) srm.style.display = 'none';
             });
             
-            setTimeout(() => { 
+setTimeout(() => { 
                 if (MemexState.network) { MemexState.network.setSize('100%', '100%'); MemexState.network.redraw(); MemexState.network.fit(); } 
             }, 250);
         };
